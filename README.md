@@ -93,9 +93,18 @@ Everything is stored in a single SQLite file on the clinic's own computer.
 No internet connection is needed for any of this to work — that's the whole
 point of CareLedger, and it will stay true as more phases are added.
 
+**Packaging** — CareLedger can now be built into a real installable program
+(`npm run dist`), so a clinic never needs to install Node.js or type a
+command. Built and tested on Linux (a `.AppImage` — download and run, no
+install step). Windows (`.exe` installer) and Mac (`.dmg`) targets are
+configured the same way, but each has to actually be *built* on that
+platform (or via a Mac/Windows CI machine) — a Linux computer can't produce
+a working `.exe`/`.dmg` on its own.
+
 All five build-order phases from the original product plan are now built,
-plus the automatic backup safeguard from Section 6. What's left is what the
-plan calls the "optional extra layer": cloud backup and phone access.
+plus the automatic backup safeguard from Section 6 and packaging. What's
+left is what the plan calls the "optional extra layer": cloud backup and
+phone access.
 
 ## How to run it
 
@@ -110,6 +119,30 @@ npm start         # opens the CareLedger window
 
 `npm install` automatically rebuilds the database engine to match Electron
 (see "A gotcha to know about" below) — you don't need to do anything extra.
+
+## Building an installable program
+
+This is for making a real copy to hand to a clinic — not needed for normal
+development (`npm start` above is all you need day-to-day).
+
+```bash
+npm run dist
+```
+
+This produces a real installer in `dist/` — the exact file type depends on
+which computer you run this command on:
+
+- **On Linux**: `CareLedger-<version>.AppImage` — a clinic downloads this
+  one file, makes it executable, and double-clicks it. No install step.
+- **On Windows**: an NSIS `.exe` installer.
+- **On Mac**: a `.dmg` you drag into Applications.
+
+You must run `npm run dist` *on* the platform you're building for (a
+Windows installer can only be built on Windows, etc.) — this is a limit of
+how these installers are put together, not something CareLedger's code
+controls. `dist/` is never committed to git (it's just built output, easy
+to regenerate) — the file that matters is whatever comes out of that
+folder, ready to hand to someone.
 
 ## How it's put together (plain words)
 
@@ -183,8 +216,14 @@ so this should rarely come up by hand.)
 
 ## Next step
 
-All five build-order phases from the product plan are done, plus automatic
-backup. The natural next step is packaging the app so a clinic can install
-it without needing Node.js at all (an actual `.exe`/`.dmg`/`.AppImage` a
-non-technical person can double-click) — the last thing standing between
-this and a clinic actually using it.
+Everything from the original product plan's build order is done, plus
+automatic backup and packaging. CareLedger is at the point described in
+Section 9: build one small showable piece, demo it — except now the whole
+thing is showable. The natural next step is real-world testing: show it to
+2-3 real clinics (Section 9), get their reaction, and let that decide what
+gets refined next — rather than guessing what to build without that
+feedback.
+
+Also still open, lower priority: a real clinic logo/name shown everywhere
+(white-labeling, Section 7, has its data foundation already — `clinicName`
+in settings — but no logo upload yet), cloud backup, and phone access.
