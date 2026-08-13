@@ -28,7 +28,8 @@
     "publish": {
       "provider": "github",
       "owner": "Geejorgbor",
-      "repo": "careledger"
+      "repo": "careledger",
+      "releaseType": "release"
     },
     "directories": {
       "output": "dist"
