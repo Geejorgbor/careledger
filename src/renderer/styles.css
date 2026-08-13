@@ -195,6 +195,7 @@ dialog form {
 }
 dialog h2 { margin: 0 0 4px 0; }
 dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+.form-subheading { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--color-text-muted); margin-top: 4px; }
 
 .modal-actions {
   display: flex;

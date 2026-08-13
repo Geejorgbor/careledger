@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS visits (
   visit_date TEXT NOT NULL,
   complaint TEXT,
   treatment TEXT,
+  temperature_c REAL,
+  blood_pressure TEXT,
+  pulse_bpm INTEGER,
+  weight_kg REAL,
   charge_amount REAL NOT NULL DEFAULT 0,
   payment_amount REAL NOT NULL DEFAULT 0,
   payment_method TEXT,
@@ -67,10 +71,24 @@ CREATE TABLE IF NOT EXISTS drug_movements (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS appointments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  patient_id INTEGER NOT NULL REFERENCES patients(id),
+  appointment_date TEXT NOT NULL,
+  appointment_time TEXT,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'Scheduled' CHECK (status IN ('Scheduled', 'Completed', 'Cancelled', 'No-Show')),
+  notes TEXT,
+  created_by_staff_id INTEGER REFERENCES staff(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_visits_patient_id ON visits(patient_id);
 CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(last_name, first_name);
 CREATE INDEX IF NOT EXISTS idx_drug_movements_drug_id ON drug_movements(drug_id);
 CREATE INDEX IF NOT EXISTS idx_drugs_name ON drugs(name);
+CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
 `;
 
 /**
@@ -101,6 +119,12 @@ function runMigrations(conn) {
   addColumnIfMissing(conn, 'visits', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
   addColumnIfMissing(conn, 'drugs', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
   addColumnIfMissing(conn, 'drug_movements', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
+
+  // Vital signs — added after visits already existed in older databases.
+  addColumnIfMissing(conn, 'visits', 'temperature_c', 'temperature_c REAL');
+  addColumnIfMissing(conn, 'visits', 'blood_pressure', 'blood_pressure TEXT');
+  addColumnIfMissing(conn, 'visits', 'pulse_bpm', 'pulse_bpm INTEGER');
+  addColumnIfMissing(conn, 'visits', 'weight_kg', 'weight_kg REAL');
 }
 
 /**
@@ -133,8 +157,8 @@ function createDb(dbPath) {
       SELECT * FROM patients ORDER BY last_name, first_name LIMIT 200
     `),
     insertVisit: conn.prepare(`
-      INSERT INTO visits (patient_id, visit_date, complaint, treatment, charge_amount, payment_amount, payment_method, notes, created_by_staff_id)
-      VALUES (@patientId, @visitDate, @complaint, @treatment, @chargeAmount, @paymentAmount, @paymentMethod, @notes, @createdByStaffId)
+      INSERT INTO visits (patient_id, visit_date, complaint, treatment, temperature_c, blood_pressure, pulse_bpm, weight_kg, charge_amount, payment_amount, payment_method, notes, created_by_staff_id)
+      VALUES (@patientId, @visitDate, @complaint, @treatment, @temperatureC, @bloodPressure, @pulseBpm, @weightKg, @chargeAmount, @paymentAmount, @paymentMethod, @notes, @createdByStaffId)
     `),
     getVisitsForPatient: conn.prepare(`
       SELECT v.*, s.name AS recorded_by_name
@@ -222,6 +246,27 @@ function createDb(dbPath) {
       WHERE expiry_date IS NOT NULL AND expiry_date <= date('now', 'localtime', '+30 days')
       ORDER BY expiry_date
     `),
+    insertAppointment: conn.prepare(`
+      INSERT INTO appointments (patient_id, appointment_date, appointment_time, reason, notes, created_by_staff_id)
+      VALUES (@patientId, @appointmentDate, @appointmentTime, @reason, @notes, @createdByStaffId)
+    `),
+    getAppointmentById: conn.prepare(`SELECT * FROM appointments WHERE id = ?`),
+    getAppointmentsForPatient: conn.prepare(`
+      SELECT * FROM appointments WHERE patient_id = ?
+      ORDER BY appointment_date DESC, appointment_time DESC, id DESC
+    `),
+    upcomingAppointments: conn.prepare(`
+      SELECT a.*, p.first_name, p.last_name, p.phone
+      FROM appointments a
+      JOIN patients p ON p.id = a.patient_id
+      WHERE a.status = 'Scheduled' AND a.appointment_date >= date('now', 'localtime')
+      ORDER BY a.appointment_date, a.appointment_time
+    `),
+    setAppointmentStatus: conn.prepare(`UPDATE appointments SET status = @status WHERE id = @id`),
+    appointmentsTodayCount: conn.prepare(`
+      SELECT COUNT(*) AS n FROM appointments
+      WHERE status = 'Scheduled' AND appointment_date = date('now', 'localtime')
+    `),
     insertStaff: conn.prepare(`
       INSERT INTO staff (name, role, username, password_hash)
       VALUES (@name, @role, @username, @passwordHash)
@@ -270,7 +315,7 @@ function createDb(dbPath) {
       return stmts.listPatients.all();
     },
 
-    addVisit({ patientId, visitDate, complaint, treatment, chargeAmount, paymentAmount, paymentMethod, notes, createdByStaffId }) {
+    addVisit({ patientId, visitDate, complaint, treatment, temperatureC, bloodPressure, pulseBpm, weightKg, chargeAmount, paymentAmount, paymentMethod, notes, createdByStaffId }) {
       if (!patientId) throw new Error('patientId is required');
       requireNonEmpty(visitDate, 'visitDate');
       if (!stmts.getPatientById.get(patientId)) {
@@ -282,11 +327,16 @@ function createDb(dbPath) {
       const charged = chargeAmount === undefined || chargeAmount === null || chargeAmount === ''
         ? paid
         : Number(chargeAmount) || 0;
+      const toNullableNumber = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
       const info = stmts.insertVisit.run({
         patientId,
         visitDate,
         complaint: complaint || null,
         treatment: treatment || null,
+        temperatureC: toNullableNumber(temperatureC),
+        bloodPressure: bloodPressure || null,
+        pulseBpm: toNullableNumber(pulseBpm),
+        weightKg: toNullableNumber(weightKg),
         chargeAmount: charged,
         paymentAmount: paid,
         paymentMethod: paymentMethod || null,
@@ -316,6 +366,7 @@ function createDb(dbPath) {
         patientsToday: stmts.patientsSeenToday.get().n,
         patientsThisWeek: stmts.patientsSeenThisWeek.get().n,
         incomeToday: stmts.incomeToday.get().total,
+        appointmentsToday: stmts.appointmentsTodayCount.get().n,
         topIllnessesThisWeek: stmts.topIllnessesThisWeek.all(),
         lowStockDrugs: stmts.lowStockDrugs.all(),
         expiringSoonDrugs: stmts.expiringSoonDrugs.all(),
@@ -407,6 +458,43 @@ function createDb(dbPath) {
 
     listExpiringSoonDrugs() {
       return stmts.expiringSoonDrugs.all();
+    },
+
+    addAppointment({ patientId, appointmentDate, appointmentTime, reason, notes, createdByStaffId }) {
+      if (!patientId) throw new Error('patientId is required');
+      requireNonEmpty(appointmentDate, 'appointmentDate');
+      if (!stmts.getPatientById.get(patientId)) {
+        throw new Error(`No patient with id ${patientId}`);
+      }
+      const info = stmts.insertAppointment.run({
+        patientId,
+        appointmentDate,
+        appointmentTime: appointmentTime || null,
+        reason: reason || null,
+        notes: notes || null,
+        createdByStaffId: createdByStaffId || null,
+      });
+      return stmts.getAppointmentById.get(info.lastInsertRowid);
+    },
+
+    getAppointmentsForPatient(patientId) {
+      return stmts.getAppointmentsForPatient.all(patientId);
+    },
+
+    listUpcomingAppointments() {
+      return stmts.upcomingAppointments.all();
+    },
+
+    setAppointmentStatus(id, status) {
+      const validStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
+      if (!validStatuses.includes(status)) {
+        throw new Error(`status must be one of: ${validStatuses.join(', ')}`);
+      }
+      if (!stmts.getAppointmentById.get(id)) {
+        throw new Error(`No appointment with id ${id}`);
+      }
+      stmts.setAppointmentStatus.run({ id, status });
+      return stmts.getAppointmentById.get(id);
     },
 
     addStaff({ name, role, username, password }) {

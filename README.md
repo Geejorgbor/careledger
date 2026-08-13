@@ -108,10 +108,36 @@ served them — with everything else on screen hidden, so what prints is
 just the receipt. Works with a real printer or "Print to PDF" (built into
 every computer's print dialog) to save/share one digitally.
 
+**Role-Based Permissions** — not every staff member should be able to do
+everything.
+- **Admin**: everything, including staff accounts and clinic settings.
+- **Doctor / Nurse**: full clinical work — patients, visits, dispensing
+  medicine, viewing billing — but not staff accounts or settings.
+- **Front Desk**: patients, visits, and billing (registration and payment
+  is their job) — but cannot touch the dispensary, staff accounts, or
+  settings. Handing out medicine is kept to clinical roles on purpose.
+- This is enforced in the program's core (`permissions.js` + `session.js`),
+  not just hidden on screen — the buttons a role can't use are hidden in
+  the UI too, but even a tampered screen couldn't bypass the real check.
+
+**Vital Signs** — recording a visit can now include temperature, blood
+pressure, pulse, and weight, all optional. They show up compactly in the
+visit history ("T: 38.5°C · BP: 120/80 · P: 72bpm · W: 65kg") and on the
+printed receipt when present.
+
+**Appointment Scheduling** — schedule a follow-up right from a patient's
+page (**+ Schedule Appointment**), and see everyone's upcoming visits in
+one place on the new **Appointments** tab — date, time, patient, phone,
+reason, with a status you can change to Completed/Cancelled/No-Show as
+things happen. The Dashboard's "Appointments Today" count ties this back
+to the original plan's Section 4 (which always meant for the Dashboard to
+show "appointments coming").
+
 All five build-order phases from the original product plan are now built,
-plus the automatic backup safeguard from Section 6, packaging, and
-printable receipts. What's left is what the plan calls the "optional extra
-layer": cloud backup and phone access.
+plus the automatic backup safeguard from Section 6, packaging, printable
+receipts, role-based permissions, vital signs, and appointment scheduling.
+What's left is what the plan calls the "optional extra layer": cloud
+backup and phone access.
 
 ## How to run it
 
@@ -167,6 +193,9 @@ folder, ready to hand to someone.
   - `backup.js` — backup filenames and the "keep only the last 10" cleanup
     logic. Plain functions, no Electron or database code, so they're easy
     to test on their own.
+  - `permissions.js` — the one place that says which role can do what
+    (Admin/Doctor/Nurse/Front Desk). `session.js` calls into this; nothing
+    else needs to know the rules.
   - `main.js` — opens the app window, starts everything up, and schedules
     the automatic backup (shortly after opening, then hourly).
 - **`src/preload/preload.js`** — a safety bridge. It only lets the screen
@@ -224,12 +253,23 @@ so this should rarely come up by hand.)
 ## Next step
 
 Everything from the original product plan's build order is done, plus
-automatic backup and packaging. CareLedger is at the point described in
-Section 9: build one small showable piece, demo it — except now the whole
-thing is showable. The natural next step is real-world testing: show it to
-2-3 real clinics (Section 9), get their reaction, and let that decide what
-gets refined next — rather than guessing what to build without that
-feedback.
+automatic backup, packaging, printable receipts, role-based permissions,
+vital signs, and appointment scheduling. CareLedger is at the point
+described in Section 9: build one small showable piece, demo it — except
+now the whole thing is showable. The natural next step is real-world
+testing: show it to 2-3 real clinics (Section 9), get their reaction, and
+let that decide what gets refined next — rather than guessing what to
+build without that feedback.
+
+One more idea worth knowing about but **not built**: an **activity/audit
+log** — a simple screen listing recent significant actions (logins,
+staff added/removed, settings changed) with who and when. Every record
+already remembers who created it (Phase 4), so most of the groundwork is
+there; this would just be a dedicated place to see the trail at a glance.
+Worth adding if/when trust and accountability become a bigger selling
+point with clinics (this was inspired by looking at what an unrelated
+company selling under the same name offers — see the naming conversation
+from earlier).
 
 Also still open, lower priority: a real clinic logo/name shown everywhere
 (white-labeling, Section 7, has its data foundation already — `clinicName`

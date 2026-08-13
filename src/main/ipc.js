@@ -34,7 +34,7 @@ function registerIpcHandlers(db, session, getBackupsDir) {
   // logged in as an existing staff member.
   handle('staff:add', (data) => {
     const isFirstAccount = !session.hasAnyStaff();
-    if (!isFirstAccount) session.requireLogin();
+    if (!isFirstAccount) session.requireAdmin();
     const staff = db.addStaff(data);
     if (isFirstAccount) session.login(data.username, data.password);
     return staff;
@@ -44,7 +44,7 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     return db.listStaff();
   });
   handle('staff:setActive', (id, active) => {
-    session.requireLogin();
+    session.requireAdmin();
     db.setStaffActive(id, active);
   });
 
@@ -72,6 +72,24 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     return db.getVisitsForPatient(patientId);
   });
 
+  // ---------- Appointments ----------
+  handle('appointments:add', (appointment) => {
+    const staff = session.requireLogin();
+    return db.addAppointment({ ...appointment, createdByStaffId: staff.id });
+  });
+  handle('appointments:listForPatient', (patientId) => {
+    session.requireLogin();
+    return db.getAppointmentsForPatient(patientId);
+  });
+  handle('appointments:listUpcoming', () => {
+    session.requireLogin();
+    return db.listUpcomingAppointments();
+  });
+  handle('appointments:setStatus', (id, status) => {
+    session.requireLogin();
+    return db.setAppointmentStatus(id, status);
+  });
+
   // ---------- Dashboard ----------
   handle('dashboard:summary', () => {
     session.requireLogin();
@@ -90,7 +108,7 @@ function registerIpcHandlers(db, session, getBackupsDir) {
 
   // ---------- Dispensary ----------
   handle('drugs:add', (drug) => {
-    const staff = session.requireLogin();
+    const staff = session.requireDispensaryAccess();
     return db.addDrug({ ...drug, createdByStaffId: staff.id });
   });
   handle('drugs:list', (searchTerm) => {
@@ -102,11 +120,11 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     return db.getDrug(id);
   });
   handle('drugs:restock', (data) => {
-    const staff = session.requireLogin();
+    const staff = session.requireDispensaryAccess();
     return db.restockDrug({ ...data, createdByStaffId: staff.id });
   });
   handle('drugs:dispense', (data) => {
-    const staff = session.requireLogin();
+    const staff = session.requireDispensaryAccess();
     return db.dispenseDrug({ ...data, createdByStaffId: staff.id });
   });
   handle('drugs:movements', (drugId) => {
@@ -155,7 +173,7 @@ function registerIpcHandlers(db, session, getBackupsDir) {
   // ---------- Settings ----------
   handle('settings:get', (key) => db.getSetting(key));
   handle('settings:set', (key, value) => {
-    session.requireLogin();
+    session.requireAdmin();
     db.setSetting(key, value);
   });
 }

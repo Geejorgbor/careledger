@@ -1,4 +1,5 @@
 const { verifyPassword } = require('./auth');
+const { canManageStaffAndSettings, canUseDispensary } = require('./permissions');
 
 /**
  * Tracks who is currently logged in, for a single-window desktop app.
@@ -10,6 +11,30 @@ function createSession(db) {
 
   function toSafeStaff(staff) {
     return { id: staff.id, name: staff.name, role: staff.role, username: staff.username };
+  }
+
+  // Used by IPC handlers that touch clinic data — throws instead of
+  // silently proceeding, so data can never be written without a known
+  // author once logins are set up.
+  function requireLogin() {
+    if (!currentStaff) throw new Error('Not logged in');
+    return currentStaff;
+  }
+
+  function requireAdmin() {
+    const staff = requireLogin();
+    if (!canManageStaffAndSettings(staff.role)) {
+      throw new Error('Only Admin accounts can do this');
+    }
+    return staff;
+  }
+
+  function requireDispensaryAccess() {
+    const staff = requireLogin();
+    if (!canUseDispensary(staff.role)) {
+      throw new Error('Front Desk accounts cannot manage the dispensary');
+    }
+    return staff;
   }
 
   return {
@@ -34,13 +59,9 @@ function createSession(db) {
       return currentStaff;
     },
 
-    // Used by IPC handlers that touch clinic data — throws instead of
-    // silently proceeding, so data can never be written without a known
-    // author once logins are set up.
-    requireLogin() {
-      if (!currentStaff) throw new Error('Not logged in');
-      return currentStaff;
-    },
+    requireLogin,
+    requireAdmin,
+    requireDispensaryAccess,
   };
 }
 

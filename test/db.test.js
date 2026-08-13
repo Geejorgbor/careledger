@@ -11,6 +11,7 @@ const { createDb } = require('../src/main/db');
 const { hashPassword, verifyPassword } = require('../src/main/auth');
 const { createSession } = require('../src/main/session');
 const { timestampedFilename, pruneOldBackups, runAutoBackup } = require('../src/main/backup');
+const { canManageStaffAndSettings, canUseDispensary } = require('../src/main/permissions');
 
 async function run() {
   const db = createDb(':memory:');
@@ -414,6 +415,109 @@ async function run() {
   fs.rmSync(`${autoBackupSourcePath}-wal`, { force: true });
   fs.rmSync(`${autoBackupSourcePath}-shm`, { force: true });
   fs.rmSync(autoBackupsDir, { recursive: true, force: true });
+
+  // Role-based permissions
+  assert.strictEqual(canManageStaffAndSettings('Admin'), true);
+  assert.strictEqual(canManageStaffAndSettings('Doctor'), false);
+  assert.strictEqual(canManageStaffAndSettings('Nurse'), false);
+  assert.strictEqual(canManageStaffAndSettings('Front Desk'), false);
+
+  assert.strictEqual(canUseDispensary('Admin'), true);
+  assert.strictEqual(canUseDispensary('Doctor'), true);
+  assert.strictEqual(canUseDispensary('Nurse'), true);
+  assert.strictEqual(canUseDispensary('Front Desk'), false);
+
+  const db4 = createDb(':memory:');
+  db4.addStaff({ name: 'Admin Person', role: 'Admin', username: 'admin1', password: 'pw' });
+  db4.addStaff({ name: 'Front Desk Person', role: 'Front Desk', username: 'frontdesk1', password: 'pw' });
+  db4.addStaff({ name: 'Doctor Person', role: 'Doctor', username: 'doctor1', password: 'pw' });
+
+  const session2 = createSession(db4);
+
+  // Front Desk: can log in and do normal logged-in things, but not admin
+  // or dispensary actions
+  session2.login('frontdesk1', 'pw');
+  assert.doesNotThrow(() => session2.requireLogin());
+  assert.throws(() => session2.requireAdmin(), /Admin/);
+  assert.throws(() => session2.requireDispensaryAccess(), /Front Desk/);
+
+  // Doctor: dispensary yes, admin no
+  session2.login('doctor1', 'pw');
+  assert.doesNotThrow(() => session2.requireDispensaryAccess());
+  assert.throws(() => session2.requireAdmin(), /Admin/);
+
+  // Admin: both
+  session2.login('admin1', 'pw');
+  assert.doesNotThrow(() => session2.requireAdmin());
+  assert.doesNotThrow(() => session2.requireDispensaryAccess());
+
+  db4.close();
+
+  // Vital signs on a visit
+  const db5 = createDb(':memory:');
+  const vitalsPatient = db5.addPatient({ firstName: 'Vitals', lastName: 'Test' });
+
+  const vitalsVisit = db5.addVisit({
+    patientId: vitalsPatient.id,
+    visitDate: today,
+    temperatureC: 38.5,
+    bloodPressure: '120/80',
+    pulseBpm: 72,
+    weightKg: 65.4,
+  });
+  assert.strictEqual(vitalsVisit.temperature_c, 38.5);
+  assert.strictEqual(vitalsVisit.blood_pressure, '120/80');
+  assert.strictEqual(vitalsVisit.pulse_bpm, 72);
+  assert.strictEqual(vitalsVisit.weight_kg, 65.4);
+
+  // Vitals are entirely optional — a visit with none of them should just
+  // store nulls, not fail or default to 0 (0°C / 0 bpm would be a very
+  // misleading medical record).
+  const noVitalsVisit = db5.addVisit({ patientId: vitalsPatient.id, visitDate: today, paymentAmount: 5 });
+  assert.strictEqual(noVitalsVisit.temperature_c, null);
+  assert.strictEqual(noVitalsVisit.blood_pressure, null);
+  assert.strictEqual(noVitalsVisit.pulse_bpm, null);
+  assert.strictEqual(noVitalsVisit.weight_kg, null);
+
+  db5.close();
+
+  // Appointment scheduling
+  const db6 = createDb(':memory:');
+  const apptPatient = db6.addPatient({ firstName: 'Appt', lastName: 'Patient' });
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const appt = db6.addAppointment({
+    patientId: apptPatient.id,
+    appointmentDate: tomorrow,
+    appointmentTime: '09:30',
+    reason: 'Follow-up',
+  });
+  assert.ok(appt.id, 'appointment should get an id');
+  assert.strictEqual(appt.status, 'Scheduled', 'new appointments default to Scheduled');
+
+  assert.throws(() => db6.addAppointment({ patientId: 9999, appointmentDate: tomorrow }), /No patient/);
+  assert.throws(() => db6.addAppointment({ patientId: apptPatient.id, appointmentDate: '' }), /appointmentDate/);
+
+  // Upcoming list: only today-or-later, Scheduled appointments show up
+  const pastAppt = db6.addAppointment({ patientId: apptPatient.id, appointmentDate: yesterday, reason: 'Old visit' });
+  let upcoming = db6.listUpcomingAppointments();
+  assert.strictEqual(upcoming.length, 1, 'a past-dated appointment should not show as upcoming');
+  assert.strictEqual(upcoming[0].id, appt.id);
+  assert.strictEqual(upcoming[0].first_name, 'Appt', 'upcoming list should include patient name via join');
+
+  // Changing status removes it from the upcoming (Scheduled-only) list
+  db6.setAppointmentStatus(appt.id, 'Completed');
+  upcoming = db6.listUpcomingAppointments();
+  assert.strictEqual(upcoming.length, 0, 'a completed appointment should no longer be upcoming');
+
+  assert.throws(() => db6.setAppointmentStatus(appt.id, 'NotARealStatus'), /status must be one of/);
+  assert.throws(() => db6.setAppointmentStatus(99999, 'Cancelled'), /No appointment/);
+
+  const patientAppts = db6.getAppointmentsForPatient(apptPatient.id);
+  assert.strictEqual(patientAppts.length, 2, 'patient should have both appointments in their history');
+
+  db6.close();
 
   console.log('All db.js tests passed.');
 }

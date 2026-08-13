@@ -4,6 +4,18 @@
 let currentPatientId = null;
 let currentPatient = null;
 let currentDrugId = null;
+let currentStaffRole = null;
+
+// Mirrors src/main/permissions.js — kept in sync by hand since the
+// renderer can't require() main-process code directly (contextIsolation).
+// This only controls what's shown; the real security boundary is enforced
+// again in ipc.js no matter what the UI hides.
+function canManageStaffAndSettings(role) {
+  return role === 'Admin';
+}
+function canUseDispensary(role) {
+  return role === 'Admin' || role === 'Doctor' || role === 'Nurse';
+}
 
 const els = {
   authScreen: document.getElementById('auth-screen'),
@@ -23,6 +35,15 @@ const els = {
   dashIllnessesEmpty: document.getElementById('dash-illnesses-empty'),
   dashAttentionTableBody: document.getElementById('dash-attention-table-body'),
   dashAttentionEmpty: document.getElementById('dash-attention-empty'),
+  dashAppointmentsToday: document.getElementById('dash-appointments-today'),
+
+  appointmentsTableBody: document.getElementById('appointments-table-body'),
+  appointmentsEmpty: document.getElementById('appointments-empty'),
+  patientAppointmentsTableBody: document.getElementById('patient-appointments-table-body'),
+  patientAppointmentsEmpty: document.getElementById('patient-appointments-empty'),
+  btnNewAppointment: document.getElementById('btn-new-appointment'),
+  modalNewAppointment: document.getElementById('modal-new-appointment'),
+  formNewAppointment: document.getElementById('form-new-appointment'),
 
   staffTableBody: document.getElementById('staff-table-body'),
   btnNewStaff: document.getElementById('btn-new-staff'),
@@ -140,19 +161,36 @@ els.btnLogout.addEventListener('click', async () => {
   els.appRoot.hidden = true;
   els.authScreen.hidden = false;
   currentPatientId = null;
+  currentPatient = null;
   currentDrugId = null;
+  currentStaffRole = null;
   switchView('dashboard');
   await initAuth();
 });
 
 async function enterApp() {
   const staff = await window.careledger.currentStaff();
+  currentStaffRole = staff.role;
   els.currentStaffLabel.textContent = `${staff.name} (${staff.role})`;
+  applyPermissionsToUI(staff.role);
   els.authScreen.hidden = true;
   els.appRoot.hidden = false;
   switchView('dashboard');
   await loadSettings();
   await loadDashboard();
+}
+
+function applyPermissionsToUI(role) {
+  const isAdmin = canManageStaffAndSettings(role);
+  const canDispense = canUseDispensary(role);
+
+  els.btnNewStaff.hidden = !isAdmin;
+  els.settingsClinicName.disabled = !isAdmin;
+  els.settingsForm.querySelector('button[type="submit"]').hidden = !isAdmin;
+
+  els.btnNewDrug.hidden = !canDispense;
+  els.btnRestockDrug.hidden = !canDispense;
+  els.btnDispenseDrug.hidden = !canDispense;
 }
 
 // ---------- Dashboard ----------
@@ -162,6 +200,7 @@ async function loadDashboard() {
   els.dashPatientsToday.textContent = summary.patientsToday;
   els.dashPatientsWeek.textContent = summary.patientsThisWeek;
   els.dashIncomeToday.textContent = formatMoney(summary.incomeToday);
+  els.dashAppointmentsToday.textContent = summary.appointmentsToday;
 
   const attentionItems = [
     ...summary.lowStockDrugs.map((d) => ({
@@ -250,6 +289,16 @@ async function openPatientDetail(patientId) {
 
   switchView('patient-detail');
   await loadVisits();
+  await loadPatientAppointments();
+}
+
+function formatVitals(v) {
+  const parts = [];
+  if (v.temperature_c !== null && v.temperature_c !== undefined) parts.push(`T: ${v.temperature_c}°C`);
+  if (v.blood_pressure) parts.push(`BP: ${v.blood_pressure}`);
+  if (v.pulse_bpm !== null && v.pulse_bpm !== undefined) parts.push(`P: ${v.pulse_bpm}bpm`);
+  if (v.weight_kg !== null && v.weight_kg !== undefined) parts.push(`W: ${v.weight_kg}kg`);
+  return parts.join(' · ');
 }
 
 async function loadVisits() {
@@ -263,6 +312,7 @@ async function loadVisits() {
       <td>${formatDate(v.visit_date)}</td>
       <td>${v.complaint || ''}</td>
       <td>${v.treatment || ''}</td>
+      <td>${formatVitals(v)}</td>
       <td>${formatMoney(v.charge_amount)}</td>
       <td>${formatMoney(v.payment_amount)}${v.payment_method ? ` (${v.payment_method})` : ''}</td>
       <td class="${balance > 0 ? 'balance-owed' : 'balance-paid'}">${formatMoney(balance)}</td>
@@ -289,6 +339,7 @@ function printReceipt(visit) {
   ];
   if (visit.complaint) rows.push(['Complaint', visit.complaint]);
   if (visit.treatment) rows.push(['Treatment', visit.treatment]);
+  if (formatVitals(visit)) rows.push(['Vitals', formatVitals(visit)]);
   rows.push(['Amount Charged', formatMoney(visit.charge_amount)]);
   rows.push(['Amount Paid', `${formatMoney(visit.payment_amount)}${visit.payment_method ? ` (${visit.payment_method})` : ''}`]);
   if (balance > 0) rows.push(['Balance Owed', formatMoney(balance)]);
@@ -342,6 +393,85 @@ els.formNewVisit.addEventListener('submit', async (e) => {
     await loadVisits();
   } catch (err) {
     alert(`Could not save visit: ${err.message}`);
+  }
+});
+
+// ---------- Appointments ----------
+
+const APPOINTMENT_STATUSES = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
+
+function statusSelect(appointment, onChange) {
+  const select = document.createElement('select');
+  for (const status of APPOINTMENT_STATUSES) {
+    const option = document.createElement('option');
+    option.value = status;
+    option.textContent = status;
+    if (status === appointment.status) option.selected = true;
+    select.appendChild(option);
+  }
+  select.addEventListener('change', async () => {
+    await window.careledger.setAppointmentStatus(appointment.id, select.value);
+    onChange();
+  });
+  return select;
+}
+
+async function loadAppointments() {
+  const appointments = await window.careledger.listUpcomingAppointments();
+  els.appointmentsTableBody.innerHTML = '';
+  els.appointmentsEmpty.hidden = appointments.length > 0;
+  for (const a of appointments) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatDate(a.appointment_date)}</td>
+      <td>${a.appointment_time || ''}</td>
+      <td>${a.first_name} ${a.last_name}</td>
+      <td>${a.phone || ''}</td>
+      <td>${a.reason || ''}</td>
+      <td></td>
+    `;
+    tr.lastElementChild.appendChild(statusSelect(a, loadAppointments));
+    tr.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'SELECT') openPatientDetail(a.patient_id);
+    });
+    els.appointmentsTableBody.appendChild(tr);
+  }
+}
+
+async function loadPatientAppointments() {
+  const appointments = await window.careledger.listAppointmentsForPatient(currentPatientId);
+  els.patientAppointmentsTableBody.innerHTML = '';
+  els.patientAppointmentsEmpty.hidden = appointments.length > 0;
+  for (const a of appointments) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatDate(a.appointment_date)}</td>
+      <td>${a.appointment_time || ''}</td>
+      <td>${a.reason || ''}</td>
+      <td></td>
+    `;
+    tr.lastElementChild.appendChild(statusSelect(a, loadPatientAppointments));
+    els.patientAppointmentsTableBody.appendChild(tr);
+  }
+}
+
+els.btnNewAppointment.addEventListener('click', () => {
+  const dateInput = els.formNewAppointment.elements['appointmentDate'];
+  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  els.modalNewAppointment.showModal();
+});
+
+els.formNewAppointment.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formNewAppointment));
+  data.patientId = currentPatientId;
+  try {
+    await window.careledger.addAppointment(data);
+    els.modalNewAppointment.close();
+    els.formNewAppointment.reset();
+    await loadPatientAppointments();
+  } catch (err) {
+    alert(`Could not save appointment: ${err.message}`);
   }
 });
 
@@ -520,16 +650,18 @@ async function loadStaff() {
       <td class="${s.active ? 'status-active' : 'status-inactive'}">${s.active ? 'Active' : 'Inactive'}</td>
       <td></td>
     `;
-    const actionCell = tr.lastElementChild;
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'secondary';
-    toggleBtn.textContent = s.active ? 'Deactivate' : 'Activate';
-    toggleBtn.addEventListener('click', async () => {
-      await window.careledger.setStaffActive(s.id, !s.active);
-      await loadStaff();
-    });
-    actionCell.appendChild(toggleBtn);
+    if (canManageStaffAndSettings(currentStaffRole)) {
+      const actionCell = tr.lastElementChild;
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'secondary';
+      toggleBtn.textContent = s.active ? 'Deactivate' : 'Activate';
+      toggleBtn.addEventListener('click', async () => {
+        await window.careledger.setStaffActive(s.id, !s.active);
+        await loadStaff();
+      });
+      actionCell.appendChild(toggleBtn);
+    }
     els.staffTableBody.appendChild(tr);
   }
 }
@@ -602,6 +734,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'patients') loadPatients();
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();
+    if (btn.dataset.view === 'appointments') loadAppointments();
     if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); }
   });
 });

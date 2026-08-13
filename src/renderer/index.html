@@ -49,6 +49,7 @@
           <button data-view="patients" class="nav-btn">Patients</button>
           <button data-view="billing" class="nav-btn">Billing</button>
           <button data-view="dispensary" class="nav-btn">Dispensary</button>
+          <button data-view="appointments" class="nav-btn">Appointments</button>
           <button data-view="settings" class="nav-btn">Settings</button>
         </nav>
         <div id="header-user">
@@ -78,6 +79,10 @@
           <div class="stat-card">
             <div class="stat-label">Needs Attention</div>
             <div class="stat-value" id="dash-needs-attention">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Appointments Today</div>
+            <div class="stat-value" id="dash-appointments-today">0</div>
           </div>
         </div>
 
@@ -145,6 +150,7 @@
               <th>Date</th>
               <th>Complaint</th>
               <th>Treatment</th>
+              <th>Vitals</th>
               <th>Charged</th>
               <th>Paid</th>
               <th>Balance</th>
@@ -156,6 +162,23 @@
           <tbody id="visits-table-body"></tbody>
         </table>
         <p id="visits-empty" class="empty-state" hidden>No visits recorded yet.</p>
+
+        <div class="toolbar">
+          <h3>Appointments</h3>
+          <button id="btn-new-appointment" class="secondary">+ Schedule Appointment</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Reason</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="patient-appointments-table-body"></tbody>
+        </table>
+        <p id="patient-appointments-empty" class="empty-state" hidden>No appointments scheduled for this patient.</p>
       </section>
 
       <!-- BILLING VIEW -->
@@ -243,6 +266,25 @@
         <p id="drug-movements-empty" class="empty-state" hidden>No stock movements recorded yet.</p>
       </section>
 
+      <!-- APPOINTMENTS VIEW -->
+      <section id="view-appointments" class="view">
+        <h2>Upcoming Appointments</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Patient</th>
+              <th>Phone</th>
+              <th>Reason</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="appointments-table-body"></tbody>
+        </table>
+        <p id="appointments-empty" class="empty-state" hidden>No appointments scheduled. Open a patient and click "+ Schedule Appointment" to add one.</p>
+      </section>
+
       <!-- SETTINGS VIEW -->
       <section id="view-settings" class="view">
         <h2>Clinic Settings</h2>
@@ -318,6 +360,11 @@
       <label>Visit Date <input name="visitDate" type="date" required /></label>
       <label>Complaint <input name="complaint" /></label>
       <label>Treatment <input name="treatment" /></label>
+      <div class="form-subheading">Vital Signs (optional)</div>
+      <label>Temperature (&deg;C) <input name="temperatureC" type="number" step="0.1" min="30" max="45" /></label>
+      <label>Blood Pressure <input name="bloodPressure" placeholder="e.g. 120/80" /></label>
+      <label>Pulse (bpm) <input name="pulseBpm" type="number" step="1" min="0" /></label>
+      <label>Weight (kg) <input name="weightKg" type="number" step="0.1" min="0" /></label>
       <label>Amount Charged <input name="chargeAmount" type="number" step="0.01" min="0" value="0" /></label>
       <label>Amount Paid Today <input name="paymentAmount" type="number" step="0.01" min="0" value="0" /></label>
       <label>Payment Method
@@ -376,6 +423,21 @@
       <label>Note <input name="note" placeholder="e.g. handed to patient" /></label>
       <div class="modal-actions">
         <button type="button" class="cancel-btn" data-close="modal-dispense-drug">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- NEW APPOINTMENT MODAL -->
+  <dialog id="modal-new-appointment">
+    <form id="form-new-appointment">
+      <h2>Schedule Appointment</h2>
+      <label>Date <input name="appointmentDate" type="date" required /></label>
+      <label>Time (optional) <input name="appointmentTime" type="time" /></label>
+      <label>Reason <input name="reason" placeholder="e.g. Follow-up, Vaccination" /></label>
+      <label>Notes <textarea name="notes" rows="2"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-new-appointment">Cancel</button>
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
