@@ -63,7 +63,7 @@ input, select, textarea {
   font-family: inherit;
 }
 
-#patient-search { flex: 1; }
+#patient-search, #drug-search { flex: 1; }
 
 button.primary {
   background: var(--color-primary);
@@ -75,6 +75,18 @@ button.primary {
   font-size: 14px;
 }
 button.primary:hover { background: var(--color-primary-dark); }
+
+button.secondary {
+  background: white;
+  color: var(--color-primary-dark);
+  border: 1px solid var(--color-primary);
+  padding: 9px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 8px;
+}
+button.secondary:hover { background: #f0f5f2; }
 
 .link-btn {
   background: none;
@@ -135,6 +147,9 @@ button.primary:hover { background: var(--color-primary-dark); }
 
 .balance-owed { color: #b3261e; font-weight: 600; }
 .balance-paid { color: var(--color-text-muted); }
+
+.stock-low { color: #b3261e; font-weight: 600; }
+.stock-expiring { color: #a15c00; font-weight: 600; }
 
 .patient-header { margin-bottom: 20px; }
 .patient-header h2 { margin: 0 0 4px 0; }

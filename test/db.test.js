@@ -140,6 +140,57 @@ function run() {
   db2.setSetting('clinicName', 'Renamed Clinic');
   assert.strictEqual(db2.getSetting('clinicName'), 'Renamed Clinic', 'setSetting should overwrite, not duplicate');
 
+  // Drug Dispensary: stock + expiry tracking
+  const soonDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10); // 5 days from now
+  const farDate = new Date(Date.now() + 200 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10); // ~6+ months out
+
+  const paracetamol = db2.addDrug({
+    name: 'Paracetamol',
+    unit: 'tablet',
+    quantityOnHand: 100,
+    reorderLevel: 20,
+    expiryDate: farDate,
+  });
+  assert.ok(paracetamol.id, 'drug should get an id');
+  assert.strictEqual(paracetamol.quantity_on_hand, 100);
+
+  assert.throws(() => db2.addDrug({ name: '' }), /name/, 'drug name is required');
+
+  // Restocking increases quantity and logs a movement
+  const afterRestock = db2.restockDrug({ drugId: paracetamol.id, quantity: 50, note: 'Delivery from supplier' });
+  assert.strictEqual(afterRestock.quantity_on_hand, 150);
+
+  // Dispensing decreases quantity and logs a movement
+  const afterDispense = db2.dispenseDrug({ drugId: paracetamol.id, quantity: 30, note: 'Handed to patient' });
+  assert.strictEqual(afterDispense.quantity_on_hand, 120);
+
+  // Cannot dispense more than is in stock
+  assert.throws(
+    () => db2.dispenseDrug({ drugId: paracetamol.id, quantity: 9999 }),
+    /in stock/,
+    'should refuse to dispense more than is on hand'
+  );
+
+  // Movement history is recorded in order (most recent first)
+  const movements = db2.getMovementsForDrug(paracetamol.id);
+  assert.strictEqual(movements.length, 2);
+  assert.strictEqual(movements[0].type, 'dispense');
+  assert.strictEqual(movements[0].quantity, 30);
+  assert.strictEqual(movements[1].type, 'restock');
+  assert.strictEqual(movements[1].quantity, 50);
+
+  // Low stock: a drug at/under its reorder level shows up
+  const bandages = db2.addDrug({ name: 'Bandages', unit: 'roll', quantityOnHand: 5, reorderLevel: 10 });
+  const lowStock = db2.listLowStockDrugs();
+  assert.strictEqual(lowStock.length, 1, 'only Bandages is at/under its reorder level');
+  assert.strictEqual(lowStock[0].id, bandages.id);
+
+  // Expiring soon: within 30 days shows up, a distant expiry does not
+  db2.addDrug({ name: 'Amoxicillin', unit: 'capsule', quantityOnHand: 40, reorderLevel: 10, expiryDate: soonDate });
+  const expiringSoon = db2.listExpiringSoonDrugs();
+  assert.strictEqual(expiringSoon.length, 1, 'only Amoxicillin expires within 30 days');
+  assert.strictEqual(expiringSoon[0].name, 'Amoxicillin');
+
   db2.close();
   console.log('All db.js tests passed.');
 }

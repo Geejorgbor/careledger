@@ -31,12 +31,25 @@ together — so the program doesn't live only in one person's head.
   first time they're opened (existing visits are treated as paid in full —
   see `runMigrations` in `db.js`). No data is ever lost or rewritten.
 
+**Phase 3 — Drug Dispensary**
+- A **Dispensary** tab tracking every medicine the clinic stocks: name,
+  unit (tablet/bottle/vial/etc.), quantity on hand, reorder level, and
+  expiry date.
+- Add a new drug, then **Restock** it (a delivery arrives) or **Dispense**
+  it (handed to a patient) — every change is logged with a timestamp and
+  note in that drug's movement history, so stock counts are never just a
+  number someone edited by hand.
+- Dispensing is blocked if it would take stock below zero — the count
+  always reflects what's really on the shelf.
+- The drug list flags **low stock** (at or under the reorder level) and
+  **expiring soon** (within 30 days) right in the table, in red/orange.
+
 Everything is stored in a single SQLite file on the clinic's own computer.
 No internet connection is needed for any of this to work — that's the whole
 point of CareLedger, and it will stay true as more phases are added.
 
-Not built yet (see the product plan for the full order): Drug Dispensary,
-Staff Logins & Security, Reports & Dashboard, cloud backup, phone access.
+Not built yet (see the product plan for the full order): Staff Logins &
+Security, Reports & Dashboard, cloud backup, phone access.
 
 ## How to run it
 
@@ -116,6 +129,5 @@ so this should rarely come up by hand.)
 
 ## Next step
 
-Phase 3 — Drug Dispensary: stock and expiry tracking for medicine the
-clinic hands out. This also doubles as the engine the future pharmacy
-product will need.
+Phase 4 — Staff Logins & Security: separate logins for doctor, nurse, and
+front desk, so the clinic knows who did what.

@@ -2,6 +2,7 @@
 // sections; state lives in a few module-level variables.
 
 let currentPatientId = null;
+let currentDrugId = null;
 
 const els = {
   clinicName: document.getElementById('clinic-name'),
@@ -34,6 +35,26 @@ const els = {
   incomeMonth: document.getElementById('income-month'),
   outstandingTableBody: document.getElementById('outstanding-table-body'),
   outstandingEmpty: document.getElementById('outstanding-empty'),
+
+  drugSearch: document.getElementById('drug-search'),
+  drugsTableBody: document.getElementById('drugs-table-body'),
+  drugsEmpty: document.getElementById('drugs-empty'),
+  btnNewDrug: document.getElementById('btn-new-drug'),
+
+  detailDrugName: document.getElementById('detail-drug-name'),
+  detailDrugMeta: document.getElementById('detail-drug-meta'),
+  drugMovementsTableBody: document.getElementById('drug-movements-table-body'),
+  drugMovementsEmpty: document.getElementById('drug-movements-empty'),
+  btnRestockDrug: document.getElementById('btn-restock-drug'),
+  btnDispenseDrug: document.getElementById('btn-dispense-drug'),
+  btnBackToDrugs: document.getElementById('btn-back-to-drugs'),
+
+  modalNewDrug: document.getElementById('modal-new-drug'),
+  formNewDrug: document.getElementById('form-new-drug'),
+  modalRestockDrug: document.getElementById('modal-restock-drug'),
+  formRestockDrug: document.getElementById('form-restock-drug'),
+  modalDispenseDrug: document.getElementById('modal-dispense-drug'),
+  formDispenseDrug: document.getElementById('form-dispense-drug'),
 };
 
 function switchView(name) {
@@ -188,6 +209,122 @@ async function loadBilling() {
   }
 }
 
+// ---------- Dispensary (drug list) ----------
+
+function isLowStock(drug) {
+  return drug.quantity_on_hand <= drug.reorder_level;
+}
+
+function isExpiringSoon(drug) {
+  if (!drug.expiry_date) return false;
+  const in30Days = new Date();
+  in30Days.setDate(in30Days.getDate() + 30);
+  return new Date(drug.expiry_date) <= in30Days;
+}
+
+async function loadDrugs() {
+  const drugs = await window.careledger.listDrugs(els.drugSearch.value);
+  els.drugsTableBody.innerHTML = '';
+  els.drugsEmpty.hidden = drugs.length > 0;
+  for (const d of drugs) {
+    const tr = document.createElement('tr');
+    const lowStock = isLowStock(d);
+    const expiringSoon = isExpiringSoon(d);
+    tr.innerHTML = `
+      <td>${d.name}</td>
+      <td>${d.unit || ''}</td>
+      <td class="${lowStock ? 'stock-low' : ''}">${d.quantity_on_hand}${lowStock ? ' (low)' : ''}</td>
+      <td>${d.reorder_level}</td>
+      <td class="${expiringSoon ? 'stock-expiring' : ''}">${formatDate(d.expiry_date)}${expiringSoon ? ' (soon)' : ''}</td>
+    `;
+    tr.addEventListener('click', () => openDrugDetail(d.id));
+    els.drugsTableBody.appendChild(tr);
+  }
+}
+
+els.drugSearch.addEventListener('input', () => loadDrugs());
+els.btnNewDrug.addEventListener('click', () => els.modalNewDrug.showModal());
+
+els.formNewDrug.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formNewDrug));
+  try {
+    await window.careledger.addDrug(data);
+    els.modalNewDrug.close();
+    els.formNewDrug.reset();
+    await loadDrugs();
+  } catch (err) {
+    alert(`Could not save drug: ${err.message}`);
+  }
+});
+
+// ---------- Drug detail / stock movements ----------
+
+async function openDrugDetail(drugId) {
+  currentDrugId = drugId;
+  const drug = await window.careledger.getDrug(drugId);
+  els.detailDrugName.textContent = drug.name;
+  const metaParts = [`${drug.quantity_on_hand} ${drug.unit || 'unit(s)'} on hand`, `reorder at ${drug.reorder_level}`];
+  if (drug.expiry_date) metaParts.push(`expires ${drug.expiry_date}`);
+  els.detailDrugMeta.textContent = metaParts.join(' · ');
+
+  switchView('drug-detail');
+  await loadDrugMovements();
+}
+
+async function loadDrugMovements() {
+  const movements = await window.careledger.getMovementsForDrug(currentDrugId);
+  els.drugMovementsTableBody.innerHTML = '';
+  els.drugMovementsEmpty.hidden = movements.length > 0;
+  for (const m of movements) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m.created_at}</td>
+      <td>${m.type === 'restock' ? 'Restock' : 'Dispense'}</td>
+      <td>${m.type === 'dispense' ? '-' : '+'}${m.quantity}</td>
+      <td>${m.note || ''}</td>
+    `;
+    els.drugMovementsTableBody.appendChild(tr);
+  }
+}
+
+els.btnBackToDrugs.addEventListener('click', () => {
+  currentDrugId = null;
+  switchView('dispensary');
+  loadDrugs();
+});
+
+els.btnRestockDrug.addEventListener('click', () => els.modalRestockDrug.showModal());
+els.btnDispenseDrug.addEventListener('click', () => els.modalDispenseDrug.showModal());
+
+els.formRestockDrug.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formRestockDrug));
+  data.drugId = currentDrugId;
+  try {
+    await window.careledger.restockDrug(data);
+    els.modalRestockDrug.close();
+    els.formRestockDrug.reset();
+    await openDrugDetail(currentDrugId);
+  } catch (err) {
+    alert(`Could not save restock: ${err.message}`);
+  }
+});
+
+els.formDispenseDrug.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formDispenseDrug));
+  data.drugId = currentDrugId;
+  try {
+    await window.careledger.dispenseDrug(data);
+    els.modalDispenseDrug.close();
+    els.formDispenseDrug.reset();
+    await openDrugDetail(currentDrugId);
+  } catch (err) {
+    alert(`Could not save dispense: ${err.message}`);
+  }
+});
+
 // ---------- Settings (white-label foundation) ----------
 
 async function loadSettings() {
@@ -214,6 +351,7 @@ els.navBtns.forEach((btn) => {
     switchView(btn.dataset.view);
     if (btn.dataset.view === 'patients') loadPatients();
     if (btn.dataset.view === 'billing') loadBilling();
+    if (btn.dataset.view === 'dispensary') loadDrugs();
   });
 });
 

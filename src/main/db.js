@@ -32,8 +32,30 @@ CREATE TABLE IF NOT EXISTS visits (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS drugs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  unit TEXT,
+  quantity_on_hand REAL NOT NULL DEFAULT 0,
+  reorder_level REAL NOT NULL DEFAULT 0,
+  expiry_date TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS drug_movements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  drug_id INTEGER NOT NULL REFERENCES drugs(id),
+  type TEXT NOT NULL CHECK (type IN ('restock', 'dispense')),
+  quantity REAL NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_visits_patient_id ON visits(patient_id);
 CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(last_name, first_name);
+CREATE INDEX IF NOT EXISTS idx_drug_movements_drug_id ON drug_movements(drug_id);
+CREATE INDEX IF NOT EXISTS idx_drugs_name ON drugs(name);
 `;
 
 /**
@@ -120,6 +142,33 @@ function createDb(dbPath) {
       WHERE v.charge_amount > v.payment_amount
       ORDER BY v.visit_date DESC
     `),
+    insertDrug: conn.prepare(`
+      INSERT INTO drugs (name, unit, quantity_on_hand, reorder_level, expiry_date, notes)
+      VALUES (@name, @unit, @quantityOnHand, @reorderLevel, @expiryDate, @notes)
+    `),
+    getDrugById: conn.prepare(`SELECT * FROM drugs WHERE id = ?`),
+    searchDrugs: conn.prepare(`
+      SELECT * FROM drugs WHERE name LIKE @term ORDER BY name LIMIT 200
+    `),
+    listDrugs: conn.prepare(`SELECT * FROM drugs ORDER BY name LIMIT 200`),
+    updateDrugQuantity: conn.prepare(`
+      UPDATE drugs SET quantity_on_hand = @quantityOnHand WHERE id = @id
+    `),
+    insertMovement: conn.prepare(`
+      INSERT INTO drug_movements (drug_id, type, quantity, note)
+      VALUES (@drugId, @type, @quantity, @note)
+    `),
+    getMovementsForDrug: conn.prepare(`
+      SELECT * FROM drug_movements WHERE drug_id = ? ORDER BY created_at DESC, id DESC
+    `),
+    lowStockDrugs: conn.prepare(`
+      SELECT * FROM drugs WHERE quantity_on_hand <= reorder_level ORDER BY name
+    `),
+    expiringSoonDrugs: conn.prepare(`
+      SELECT * FROM drugs
+      WHERE expiry_date IS NOT NULL AND expiry_date <= date('now', 'localtime', '+30 days')
+      ORDER BY expiry_date
+    `),
   };
 
   function requireNonEmpty(value, fieldName) {
@@ -202,6 +251,79 @@ function createDb(dbPath) {
 
     setSetting(key, value) {
       stmts.setSetting.run({ key, value });
+    },
+
+    addDrug({ name, unit, quantityOnHand, reorderLevel, expiryDate, notes }) {
+      requireNonEmpty(name, 'name');
+      const info = stmts.insertDrug.run({
+        name: name.trim(),
+        unit: unit || null,
+        quantityOnHand: Number(quantityOnHand) || 0,
+        reorderLevel: Number(reorderLevel) || 0,
+        expiryDate: expiryDate || null,
+        notes: notes || null,
+      });
+      return stmts.getDrugById.get(info.lastInsertRowid);
+    },
+
+    getDrug(id) {
+      return stmts.getDrugById.get(id);
+    },
+
+    listDrugs(searchTerm) {
+      if (searchTerm && searchTerm.trim()) {
+        return stmts.searchDrugs.all({ term: `%${searchTerm.trim()}%` });
+      }
+      return stmts.listDrugs.all();
+    },
+
+    // Adds to stock (a new delivery arriving). If a new expiry date is
+    // given it replaces the stored one — clinics track the soonest
+    // expiring batch, not a full per-batch history, to keep this simple.
+    restockDrug({ drugId, quantity, expiryDate, note }) {
+      const drug = stmts.getDrugById.get(drugId);
+      if (!drug) throw new Error(`No drug with id ${drugId}`);
+      const qty = Number(quantity);
+      if (!qty || qty <= 0) throw new Error('quantity must be greater than 0');
+      const run = conn.transaction(() => {
+        stmts.updateDrugQuantity.run({ id: drugId, quantityOnHand: drug.quantity_on_hand + qty });
+        if (expiryDate) {
+          conn.prepare('UPDATE drugs SET expiry_date = ? WHERE id = ?').run(expiryDate, drugId);
+        }
+        stmts.insertMovement.run({ drugId, type: 'restock', quantity: qty, note: note || null });
+      });
+      run();
+      return stmts.getDrugById.get(drugId);
+    },
+
+    // Removes from stock (medicine handed to a patient). Cannot dispense
+    // more than is on hand — the count must always reflect real stock.
+    dispenseDrug({ drugId, quantity, note }) {
+      const drug = stmts.getDrugById.get(drugId);
+      if (!drug) throw new Error(`No drug with id ${drugId}`);
+      const qty = Number(quantity);
+      if (!qty || qty <= 0) throw new Error('quantity must be greater than 0');
+      if (qty > drug.quantity_on_hand) {
+        throw new Error(`Only ${drug.quantity_on_hand} ${drug.unit || 'unit(s)'} of ${drug.name} in stock`);
+      }
+      const run = conn.transaction(() => {
+        stmts.updateDrugQuantity.run({ id: drugId, quantityOnHand: drug.quantity_on_hand - qty });
+        stmts.insertMovement.run({ drugId, type: 'dispense', quantity: qty, note: note || null });
+      });
+      run();
+      return stmts.getDrugById.get(drugId);
+    },
+
+    getMovementsForDrug(drugId) {
+      return stmts.getMovementsForDrug.all(drugId);
+    },
+
+    listLowStockDrugs() {
+      return stmts.lowStockDrugs.all();
+    },
+
+    listExpiringSoonDrugs() {
+      return stmts.expiringSoonDrugs.all();
     },
 
     close() {

@@ -23,6 +23,14 @@ function registerIpcHandlers(db) {
   handle('visits:listForPatient', (patientId) => db.getVisitsForPatient(patientId));
   handle('billing:incomeSummary', () => db.getIncomeSummary());
   handle('billing:outstandingBalances', () => db.listOutstandingBalances());
+  handle('drugs:add', (drug) => db.addDrug(drug));
+  handle('drugs:list', (searchTerm) => db.listDrugs(searchTerm));
+  handle('drugs:get', (id) => db.getDrug(id));
+  handle('drugs:restock', (data) => db.restockDrug(data));
+  handle('drugs:dispense', (data) => db.dispenseDrug(data));
+  handle('drugs:movements', (drugId) => db.getMovementsForDrug(drugId));
+  handle('drugs:lowStock', () => db.listLowStockDrugs());
+  handle('drugs:expiringSoon', () => db.listExpiringSoonDrugs());
   handle('settings:get', (key) => db.getSetting(key));
   handle('settings:set', (key, value) => db.setSetting(key, value));
 }

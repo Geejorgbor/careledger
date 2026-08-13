@@ -12,6 +12,7 @@
       <nav>
         <button data-view="patients" class="nav-btn active">Patients</button>
         <button data-view="billing" class="nav-btn">Billing</button>
+        <button data-view="dispensary" class="nav-btn">Dispensary</button>
         <button data-view="settings" class="nav-btn">Settings</button>
       </nav>
     </header>
@@ -100,6 +101,56 @@
         <p id="outstanding-empty" class="empty-state" hidden>Nothing owed right now — every visit is paid in full.</p>
       </section>
 
+      <!-- DISPENSARY VIEW -->
+      <section id="view-dispensary" class="view">
+        <div class="toolbar">
+          <input id="drug-search" type="text" placeholder="Search medicine by name..." />
+          <button id="btn-new-drug" class="primary">+ New Drug</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Unit</th>
+              <th>In Stock</th>
+              <th>Reorder Level</th>
+              <th>Expiry Date</th>
+            </tr>
+          </thead>
+          <tbody id="drugs-table-body"></tbody>
+        </table>
+        <p id="drugs-empty" class="empty-state" hidden>No medicine yet. Click "+ New Drug" to add some to stock.</p>
+      </section>
+
+      <!-- DRUG DETAIL VIEW -->
+      <section id="view-drug-detail" class="view">
+        <button id="btn-back-to-drugs" class="link-btn">&larr; Back to Dispensary</button>
+        <div class="patient-header">
+          <h2 id="detail-drug-name"></h2>
+          <div id="detail-drug-meta"></div>
+        </div>
+
+        <div class="toolbar">
+          <h3>Stock Movements</h3>
+          <div>
+            <button id="btn-restock-drug" class="secondary">Restock</button>
+            <button id="btn-dispense-drug" class="primary">Dispense</button>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Quantity</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="drug-movements-table-body"></tbody>
+        </table>
+        <p id="drug-movements-empty" class="empty-state" hidden>No stock movements recorded yet.</p>
+      </section>
+
       <!-- SETTINGS VIEW -->
       <section id="view-settings" class="view">
         <h2>Clinic Settings</h2>
@@ -161,6 +212,50 @@
       <div class="modal-actions">
         <button type="button" class="cancel-btn" data-close="modal-new-visit">Cancel</button>
         <button type="submit" class="primary">Save Visit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- NEW DRUG MODAL -->
+  <dialog id="modal-new-drug">
+    <form id="form-new-drug">
+      <h2>New Drug</h2>
+      <label>Name <input name="name" required /></label>
+      <label>Unit <input name="unit" placeholder="e.g. tablet, bottle, vial" /></label>
+      <label>Quantity On Hand <input name="quantityOnHand" type="number" step="1" min="0" value="0" /></label>
+      <label>Reorder Level <input name="reorderLevel" type="number" step="1" min="0" value="0" /></label>
+      <label>Expiry Date <input name="expiryDate" type="date" /></label>
+      <label>Notes <textarea name="notes" rows="2"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-new-drug">Cancel</button>
+        <button type="submit" class="primary">Save Drug</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- RESTOCK DRUG MODAL -->
+  <dialog id="modal-restock-drug">
+    <form id="form-restock-drug">
+      <h2>Restock</h2>
+      <label>Quantity Received <input name="quantity" type="number" step="1" min="1" required /></label>
+      <label>New Expiry Date (if this delivery expires sooner/later) <input name="expiryDate" type="date" /></label>
+      <label>Note <input name="note" placeholder="e.g. delivery from supplier" /></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-restock-drug">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- DISPENSE DRUG MODAL -->
+  <dialog id="modal-dispense-drug">
+    <form id="form-dispense-drug">
+      <h2>Dispense</h2>
+      <label>Quantity <input name="quantity" type="number" step="1" min="1" required /></label>
+      <label>Note <input name="note" placeholder="e.g. handed to patient" /></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-dispense-drug">Cancel</button>
+        <button type="submit" class="primary">Save</button>
       </div>
     </form>
   </dialog>
