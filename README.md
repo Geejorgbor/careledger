@@ -133,9 +133,28 @@ things happen. The Dashboard's "Appointments Today" count ties this back
 to the original plan's Section 4 (which always meant for the Dashboard to
 show "appointments coming").
 
+**Automatic App Updates** — CareLedger checks its own GitHub page
+(https://github.com/Geejorgbor/careledger) for a newer version shortly
+after opening (only when there's internet — otherwise it just carries on
+completely normally, silently, exactly like it always has). If one is
+found, it downloads quietly in the background and installs itself the
+next time the app restarts — nobody has to go find and reinstall anything
+by hand. **Settings → Updates** shows the version currently running and
+has a **Check for Updates** button to check right now instead of waiting.
+This only works in the real installed app, not while developing with
+`npm start`.
+
+To actually ship an update to clinics: bump the `version` in
+`package.json`, commit, then run `npm run release` (needs a GitHub token
+in the `GH_TOKEN` environment variable — `gh auth token` prints it if
+you're logged in with the GitHub CLI). That builds the installer *and*
+publishes it as a GitHub Release in one step, which is exactly what
+already-installed copies of CareLedger check against.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
-receipts, role-based permissions, vital signs, and appointment scheduling.
+receipts, role-based permissions, vital signs, appointment scheduling, and
+automatic app updates.
 What's left is what the plan calls the "optional extra layer": cloud
 backup and phone access.
 
@@ -196,8 +215,12 @@ folder, ready to hand to someone.
   - `permissions.js` — the one place that says which role can do what
     (Admin/Doctor/Nurse/Front Desk). `session.js` calls into this; nothing
     else needs to know the rules.
+  - `updater.js` — checks GitHub for a newer version and quietly downloads
+    it; failures (e.g. no internet) are logged and otherwise ignored, never
+    shown to the user or allowed to disrupt the app.
   - `main.js` — opens the app window, starts everything up, and schedules
-    the automatic backup (shortly after opening, then hourly).
+    the automatic backup (shortly after opening, then hourly) and the
+    update check.
 - **`src/preload/preload.js`** — a safety bridge. It only lets the screen
   call the specific actions listed here (add patient, list patients, etc.),
   nothing else. This keeps the app secure.

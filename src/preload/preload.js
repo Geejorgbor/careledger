@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('careledger', {
   getBackupStatus: () => unwrap(ipcRenderer.invoke('backup:status')),
   runBackupNow: () => unwrap(ipcRenderer.invoke('backup:runNow')),
   exportBackup: () => unwrap(ipcRenderer.invoke('backup:exportTo')),
+  getAppVersion: () => unwrap(ipcRenderer.invoke('app:getVersion')),
+  checkForUpdates: () => unwrap(ipcRenderer.invoke('app:checkForUpdates')),
   getSetting: (key) => unwrap(ipcRenderer.invoke('settings:get', key)),
   setSetting: (key, value) => unwrap(ipcRenderer.invoke('settings:set', key, value)),
 });

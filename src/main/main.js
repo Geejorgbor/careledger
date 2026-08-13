@@ -4,6 +4,7 @@ const { createDb } = require('./db');
 const { registerIpcHandlers } = require('./ipc');
 const { createSession } = require('./session');
 const { runAutoBackup } = require('./backup');
+const { checkForUpdatesQuietly } = require('./updater');
 
 const AUTO_BACKUP_INTERVAL_MS = 60 * 60 * 1000; // hourly
 const FIRST_AUTO_BACKUP_DELAY_MS = 10 * 1000; // shortly after startup, not blocking it
@@ -61,6 +62,12 @@ app.whenReady().then(() => {
 
   setTimeout(performAutoBackup, FIRST_AUTO_BACKUP_DELAY_MS);
   setInterval(performAutoBackup, AUTO_BACKUP_INTERVAL_MS);
+
+  // Only checks in the real installed app — during development (npm
+  // start) there's no packaged update artifact to compare against.
+  if (app.isPackaged) {
+    checkForUpdatesQuietly();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

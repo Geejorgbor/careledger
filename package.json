@@ -10,10 +10,12 @@
     "start": "electron .",
     "test:db": "ELECTRON_RUN_AS_NODE=1 electron test/db.test.js",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "release": "electron-builder --publish always"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0"
+    "better-sqlite3": "^11.3.0",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
@@ -23,6 +25,11 @@
   "build": {
     "appId": "com.payeconnect.careledger",
     "productName": "CareLedger",
+    "publish": {
+      "provider": "github",
+      "owner": "Geejorgbor",
+      "repo": "careledger"
+    },
     "directories": {
       "output": "dist"
     },
@@ -32,14 +39,20 @@
       "!**/*.md"
     ],
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Office"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "mac": {
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
     "nsis": {
       "oneClick": false,

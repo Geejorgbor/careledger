@@ -1,5 +1,6 @@
-const { ipcMain, dialog, BrowserWindow } = require('electron');
+const { ipcMain, dialog, BrowserWindow, app } = require('electron');
 const { runAutoBackup } = require('./backup');
+const { autoUpdater } = require('./updater');
 
 /**
  * Wires renderer IPC channels to the database layer. Every handler is
@@ -168,6 +169,17 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     await db.backupTo(filePath);
     db.setSetting('lastManualBackupAt', new Date().toISOString());
     return { canceled: false, filePath };
+  });
+
+  // ---------- App / Updates ----------
+  handle('app:getVersion', () => app.getVersion());
+  handle('app:checkForUpdates', async () => {
+    session.requireLogin();
+    if (!app.isPackaged) {
+      throw new Error('Checking for updates only works in the installed app, not while developing.');
+    }
+    const result = await autoUpdater.checkForUpdates();
+    return { version: result && result.updateInfo ? result.updateInfo.version : app.getVersion() };
   });
 
   // ---------- Settings ----------

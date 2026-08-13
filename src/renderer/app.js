@@ -54,6 +54,10 @@ const els = {
   btnBackupNow: document.getElementById('btn-backup-now'),
   btnBackupExport: document.getElementById('btn-backup-export'),
 
+  appVersion: document.getElementById('app-version'),
+  btnCheckUpdates: document.getElementById('btn-check-updates'),
+  updateStatus: document.getElementById('update-status'),
+
   clinicName: document.getElementById('clinic-name'),
   navBtns: document.querySelectorAll('.nav-btn'),
   views: document.querySelectorAll('.view'),
@@ -725,6 +729,29 @@ els.btnBackupExport.addEventListener('click', async () => {
   }
 });
 
+// ---------- Updates ----------
+
+async function loadAppVersion() {
+  const version = await window.careledger.getAppVersion();
+  els.appVersion.textContent = `You're running version ${version}.`;
+}
+
+els.btnCheckUpdates.addEventListener('click', async () => {
+  els.btnCheckUpdates.disabled = true;
+  els.updateStatus.textContent = 'Checking…';
+  try {
+    const result = await window.careledger.checkForUpdates();
+    const current = await window.careledger.getAppVersion();
+    els.updateStatus.textContent = result.version === current
+      ? "You're on the latest version."
+      : `Update found (version ${result.version}) — it will download in the background and be ready next time you restart CareLedger.`;
+  } catch (err) {
+    els.updateStatus.textContent = `Could not check for updates: ${err.message}`;
+  } finally {
+    els.btnCheckUpdates.disabled = false;
+  }
+});
+
 // ---------- Nav + modal close buttons ----------
 
 els.navBtns.forEach((btn) => {
@@ -735,7 +762,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();
     if (btn.dataset.view === 'appointments') loadAppointments();
-    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); }
+    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); }
   });
 });
 
