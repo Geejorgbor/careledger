@@ -8,6 +8,8 @@ const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
 const { createDb } = require('../src/main/db');
+const { hashPassword, verifyPassword } = require('../src/main/auth');
+const { createSession } = require('../src/main/session');
 
 function run() {
   const db = createDb(':memory:');
@@ -191,7 +193,131 @@ function run() {
   assert.strictEqual(expiringSoon.length, 1, 'only Amoxicillin expires within 30 days');
   assert.strictEqual(expiringSoon[0].name, 'Amoxicillin');
 
+  // Staff Logins & Security
+
+  // Password hashing: never store/compare plaintext, salted so two equal
+  // passwords don't produce equal hashes
+  const hash1 = hashPassword('correct-horse');
+  const hash2 = hashPassword('correct-horse');
+  assert.notStrictEqual(hash1, hash2, 'same password should hash differently each time (random salt)');
+  assert.ok(verifyPassword('correct-horse', hash1), 'correct password should verify');
+  assert.ok(!verifyPassword('wrong-password', hash1), 'wrong password should not verify');
+
+  const nurse = db2.addStaff({ name: 'Nurse Joy', role: 'Nurse', username: 'NurseJoy', password: 'petals123' });
+  assert.ok(nurse.id, 'staff should get an id');
+  assert.strictEqual(nurse.password_hash, undefined, 'listStaff-shaped result should never include the password hash');
+  assert.strictEqual(nurse.username, 'nursejoy', 'usernames are stored lowercase');
+
+  assert.throws(() => db2.addStaff({ name: 'Someone', role: 'Nurse', username: 'nursejoy', password: 'x' }), /taken/, 'usernames must be unique, case-insensitively');
+  assert.throws(() => db2.addStaff({ name: '', role: 'Nurse', username: 'x', password: 'x' }), /name/);
+
+  const fullNurseRecord = db2.getStaffByUsername('nursejoy');
+  assert.ok(fullNurseRecord.password_hash, 'internal lookup by username should include the hash for verification');
+  assert.ok(verifyPassword('petals123', fullNurseRecord.password_hash));
+
+  assert.strictEqual(db2.countActiveStaff(), 1);
+  db2.setStaffActive(nurse.id, false);
+  assert.strictEqual(db2.countActiveStaff(), 0, 'deactivated staff should not count as active');
+  db2.setStaffActive(nurse.id, true);
+  assert.strictEqual(db2.countActiveStaff(), 1);
+
+  const staffList = db2.listStaff();
+  assert.strictEqual(staffList.length, 1);
+  assert.strictEqual(staffList[0].password_hash, undefined, 'listStaff must never expose password hashes to the renderer');
+
+  // Session: login/logout, and requireLogin gating
+  const session = createSession(db2);
+  assert.strictEqual(session.hasAnyStaff(), true);
+  assert.strictEqual(session.getCurrentStaff(), null, 'nobody logged in yet on a fresh session');
+  assert.throws(() => session.requireLogin(), /Not logged in/);
+
+  assert.throws(() => session.login('nursejoy', 'wrong-password'), /Incorrect/);
+  assert.throws(() => session.login('nobody', 'petals123'), /Incorrect/);
+
+  const loggedIn = session.login('nursejoy', 'petals123');
+  assert.strictEqual(loggedIn.name, 'Nurse Joy');
+  assert.strictEqual(loggedIn.password_hash, undefined, 'session-returned staff must never include the password hash');
+  assert.deepStrictEqual(session.getCurrentStaff(), loggedIn);
+  assert.deepStrictEqual(session.requireLogin(), loggedIn);
+
+  db2.setStaffActive(nurse.id, false);
+  assert.throws(() => session.login('nursejoy', 'petals123'), /Incorrect/, 'a deactivated account cannot log in');
+
+  session.logout();
+  assert.strictEqual(session.getCurrentStaff(), null);
+  assert.throws(() => session.requireLogin(), /Not logged in/);
+
+  db2.setStaffActive(nurse.id, true); // restore for reuse below
+  session.login('nursejoy', 'petals123');
+  const doctor = db2.addStaff({ name: 'Dr. Marshall', role: 'Doctor', username: 'drmarshall', password: 'stethoscope' });
+
+  // Attribution: created_by_staff_id is stamped and joined back with a name
+  const attributedPatient = db2.addPatient({ firstName: 'Attributed', lastName: 'Patient', createdByStaffId: doctor.id });
+  const attributedVisit = db2.addVisit({
+    patientId: attributedPatient.id,
+    visitDate: today,
+    paymentAmount: 10,
+    createdByStaffId: doctor.id,
+  });
+  assert.strictEqual(attributedVisit.created_by_staff_id, doctor.id);
+  const visitsWithAuthor = db2.getVisitsForPatient(attributedPatient.id);
+  assert.strictEqual(visitsWithAuthor[0].recorded_by_name, 'Dr. Marshall', 'visit history should show who recorded it');
+
+  const attributedDrug = db2.addDrug({ name: 'Ibuprofen', quantityOnHand: 50, reorderLevel: 10, createdByStaffId: doctor.id });
+  db2.restockDrug({ drugId: attributedDrug.id, quantity: 10, createdByStaffId: doctor.id });
+  const drugMovementsWithAuthor = db2.getMovementsForDrug(attributedDrug.id);
+  assert.strictEqual(drugMovementsWithAuthor[0].recorded_by_name, 'Dr. Marshall', 'stock movements should show who did it');
+
+  // A record made with no logged-in staff (or before Phase 4 existed) has
+  // no author, and that's fine — not every historical record can have one.
+  const unattributedPatient = db2.addPatient({ firstName: 'No', lastName: 'Author' });
+  assert.strictEqual(unattributedPatient.created_by_staff_id, null);
+
   db2.close();
+
+  // Migration path: a pre-Phase-4 database (no staff table, no
+  // created_by_staff_id columns anywhere) should upgrade cleanly.
+  const legacyDb2Path = path.join(os.tmpdir(), `careledger-legacy-phase4-test-${Date.now()}.db`);
+  const legacyConn2 = new Database(legacyDb2Path);
+  legacyConn2.exec(`
+    CREATE TABLE patients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL, last_name TEXT NOT NULL,
+      date_of_birth TEXT, gender TEXT, phone TEXT, address TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE visits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id INTEGER NOT NULL,
+      visit_date TEXT NOT NULL, complaint TEXT, treatment TEXT,
+      charge_amount REAL NOT NULL DEFAULT 0, payment_amount REAL NOT NULL DEFAULT 0,
+      payment_method TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE drugs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, unit TEXT,
+      quantity_on_hand REAL NOT NULL DEFAULT 0, reorder_level REAL NOT NULL DEFAULT 0,
+      expiry_date TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE drug_movements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, drug_id INTEGER NOT NULL,
+      type TEXT NOT NULL, quantity REAL NOT NULL, note TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+  const legacyPid2 = legacyConn2.prepare(`INSERT INTO patients (first_name, last_name) VALUES ('Legacy', 'Patient')`).run().lastInsertRowid;
+  legacyConn2.close();
+
+  const migratedDb2 = createDb(legacyDb2Path);
+  assert.strictEqual(migratedDb2.countActiveStaff(), 0, 'no staff exist yet on an upgraded legacy database');
+  const migratedPatient = migratedDb2.getPatient(legacyPid2);
+  assert.strictEqual(migratedPatient.created_by_staff_id, null, 'pre-Phase-4 records simply have no known author');
+  // The upgraded database should be fully usable: create the first account.
+  const firstStaff = migratedDb2.addStaff({ name: 'Setup Admin', role: 'Admin', username: 'admin', password: 'setup123' });
+  assert.ok(firstStaff.id);
+  migratedDb2.close();
+  fs.rmSync(legacyDb2Path, { force: true });
+  fs.rmSync(`${legacyDb2Path}-wal`, { force: true });
+  fs.rmSync(`${legacyDb2Path}-shm`, { force: true });
+
   console.log('All db.js tests passed.');
 }
 

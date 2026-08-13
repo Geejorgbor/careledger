@@ -28,6 +28,29 @@ body {
 
 #app-header h1 { margin: 0; font-size: 20px; }
 
+.header-right { display: flex; align-items: center; gap: 20px; }
+
+#header-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(255,255,255,0.3);
+  font-size: 13px;
+  color: rgba(255,255,255,0.9);
+}
+
+.link-btn-white {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.5);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.link-btn-white:hover { background: rgba(255,255,255,0.15); }
+
 .nav-btn {
   background: transparent;
   border: none;
@@ -195,3 +218,36 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   max-width: 360px;
 }
 #settings-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+
+#auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+}
+
+.auth-box {
+  width: 380px;
+  max-width: 90vw;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 32px;
+}
+
+.auth-box h1 { margin: 0 0 20px 0; color: var(--color-primary-dark); text-align: center; }
+.auth-box h2 { margin: 0 0 4px 0; }
+.auth-sub { font-size: 13px; color: var(--color-text-muted); margin: 0 0 16px 0; }
+
+#form-setup, #form-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#form-setup label, #form-login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+
+.auth-error { color: #b3261e; font-size: 13px; margin: 4px 0 0 0; }
+
+.status-active { color: var(--color-primary-dark); font-weight: 600; }
+.status-inactive { color: var(--color-text-muted); }

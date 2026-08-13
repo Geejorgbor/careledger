@@ -1,11 +1,22 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const { hashPassword } = require('./auth');
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT
+);
+
+CREATE TABLE IF NOT EXISTS staff (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS patients (
@@ -16,6 +27,7 @@ CREATE TABLE IF NOT EXISTS patients (
   gender TEXT,
   phone TEXT,
   address TEXT,
+  created_by_staff_id INTEGER REFERENCES staff(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -29,6 +41,7 @@ CREATE TABLE IF NOT EXISTS visits (
   payment_amount REAL NOT NULL DEFAULT 0,
   payment_method TEXT,
   notes TEXT,
+  created_by_staff_id INTEGER REFERENCES staff(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -40,6 +53,7 @@ CREATE TABLE IF NOT EXISTS drugs (
   reorder_level REAL NOT NULL DEFAULT 0,
   expiry_date TEXT,
   notes TEXT,
+  created_by_staff_id INTEGER REFERENCES staff(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -49,6 +63,7 @@ CREATE TABLE IF NOT EXISTS drug_movements (
   type TEXT NOT NULL CHECK (type IN ('restock', 'dispense')),
   quantity REAL NOT NULL,
   note TEXT,
+  created_by_staff_id INTEGER REFERENCES staff(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -63,6 +78,13 @@ CREATE INDEX IF NOT EXISTS idx_drugs_name ON drugs(name);
  * columns and backfills them — never drops or rewrites existing data, so a
  * clinic's real records are never at risk when the app is updated.
  */
+function addColumnIfMissing(conn, table, column, ddl) {
+  const cols = conn.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) {
+    conn.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+
 function runMigrations(conn) {
   const visitCols = conn.prepare("PRAGMA table_info(visits)").all().map((c) => c.name);
   if (!visitCols.includes('charge_amount')) {
@@ -72,6 +94,13 @@ function runMigrations(conn) {
     // was owed on those older visits.
     conn.exec('UPDATE visits SET charge_amount = payment_amount WHERE charge_amount IS NULL');
   }
+
+  // Records made before Phase 4 (logins) simply have no known author —
+  // left NULL rather than guessed at.
+  addColumnIfMissing(conn, 'patients', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
+  addColumnIfMissing(conn, 'visits', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
+  addColumnIfMissing(conn, 'drugs', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
+  addColumnIfMissing(conn, 'drug_movements', 'created_by_staff_id', 'created_by_staff_id INTEGER REFERENCES staff(id)');
 }
 
 /**
@@ -90,8 +119,8 @@ function createDb(dbPath) {
 
   const stmts = {
     insertPatient: conn.prepare(`
-      INSERT INTO patients (first_name, last_name, date_of_birth, gender, phone, address)
-      VALUES (@firstName, @lastName, @dateOfBirth, @gender, @phone, @address)
+      INSERT INTO patients (first_name, last_name, date_of_birth, gender, phone, address, created_by_staff_id)
+      VALUES (@firstName, @lastName, @dateOfBirth, @gender, @phone, @address, @createdByStaffId)
     `),
     getPatientById: conn.prepare(`SELECT * FROM patients WHERE id = ?`),
     searchPatients: conn.prepare(`
@@ -104,11 +133,15 @@ function createDb(dbPath) {
       SELECT * FROM patients ORDER BY last_name, first_name LIMIT 200
     `),
     insertVisit: conn.prepare(`
-      INSERT INTO visits (patient_id, visit_date, complaint, treatment, charge_amount, payment_amount, payment_method, notes)
-      VALUES (@patientId, @visitDate, @complaint, @treatment, @chargeAmount, @paymentAmount, @paymentMethod, @notes)
+      INSERT INTO visits (patient_id, visit_date, complaint, treatment, charge_amount, payment_amount, payment_method, notes, created_by_staff_id)
+      VALUES (@patientId, @visitDate, @complaint, @treatment, @chargeAmount, @paymentAmount, @paymentMethod, @notes, @createdByStaffId)
     `),
     getVisitsForPatient: conn.prepare(`
-      SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC, id DESC
+      SELECT v.*, s.name AS recorded_by_name
+      FROM visits v
+      LEFT JOIN staff s ON s.id = v.created_by_staff_id
+      WHERE v.patient_id = ?
+      ORDER BY v.visit_date DESC, v.id DESC
     `),
     getSetting: conn.prepare(`SELECT value FROM settings WHERE key = ?`),
     setSetting: conn.prepare(`
@@ -143,8 +176,8 @@ function createDb(dbPath) {
       ORDER BY v.visit_date DESC
     `),
     insertDrug: conn.prepare(`
-      INSERT INTO drugs (name, unit, quantity_on_hand, reorder_level, expiry_date, notes)
-      VALUES (@name, @unit, @quantityOnHand, @reorderLevel, @expiryDate, @notes)
+      INSERT INTO drugs (name, unit, quantity_on_hand, reorder_level, expiry_date, notes, created_by_staff_id)
+      VALUES (@name, @unit, @quantityOnHand, @reorderLevel, @expiryDate, @notes, @createdByStaffId)
     `),
     getDrugById: conn.prepare(`SELECT * FROM drugs WHERE id = ?`),
     searchDrugs: conn.prepare(`
@@ -155,11 +188,15 @@ function createDb(dbPath) {
       UPDATE drugs SET quantity_on_hand = @quantityOnHand WHERE id = @id
     `),
     insertMovement: conn.prepare(`
-      INSERT INTO drug_movements (drug_id, type, quantity, note)
-      VALUES (@drugId, @type, @quantity, @note)
+      INSERT INTO drug_movements (drug_id, type, quantity, note, created_by_staff_id)
+      VALUES (@drugId, @type, @quantity, @note, @createdByStaffId)
     `),
     getMovementsForDrug: conn.prepare(`
-      SELECT * FROM drug_movements WHERE drug_id = ? ORDER BY created_at DESC, id DESC
+      SELECT m.*, s.name AS recorded_by_name
+      FROM drug_movements m
+      LEFT JOIN staff s ON s.id = m.created_by_staff_id
+      WHERE m.drug_id = ?
+      ORDER BY m.created_at DESC, m.id DESC
     `),
     lowStockDrugs: conn.prepare(`
       SELECT * FROM drugs WHERE quantity_on_hand <= reorder_level ORDER BY name
@@ -169,6 +206,19 @@ function createDb(dbPath) {
       WHERE expiry_date IS NOT NULL AND expiry_date <= date('now', 'localtime', '+30 days')
       ORDER BY expiry_date
     `),
+    insertStaff: conn.prepare(`
+      INSERT INTO staff (name, role, username, password_hash)
+      VALUES (@name, @role, @username, @passwordHash)
+    `),
+    getStaffById: conn.prepare(`SELECT * FROM staff WHERE id = ?`),
+    getStaffByUsername: conn.prepare(`SELECT * FROM staff WHERE username = ?`),
+    // Deliberately excludes password_hash — this is the shape sent to the
+    // renderer, and a password hash should never leave the main process.
+    listStaff: conn.prepare(`
+      SELECT id, name, role, username, active, created_at FROM staff ORDER BY name
+    `),
+    countActiveStaff: conn.prepare(`SELECT COUNT(*) AS n FROM staff WHERE active = 1`),
+    setStaffActive: conn.prepare(`UPDATE staff SET active = @active WHERE id = @id`),
   };
 
   function requireNonEmpty(value, fieldName) {
@@ -178,7 +228,7 @@ function createDb(dbPath) {
   }
 
   return {
-    addPatient({ firstName, lastName, dateOfBirth, gender, phone, address }) {
+    addPatient({ firstName, lastName, dateOfBirth, gender, phone, address, createdByStaffId }) {
       requireNonEmpty(firstName, 'firstName');
       requireNonEmpty(lastName, 'lastName');
       const info = stmts.insertPatient.run({
@@ -188,6 +238,7 @@ function createDb(dbPath) {
         gender: gender || null,
         phone: phone || null,
         address: address || null,
+        createdByStaffId: createdByStaffId || null,
       });
       return stmts.getPatientById.get(info.lastInsertRowid);
     },
@@ -203,7 +254,7 @@ function createDb(dbPath) {
       return stmts.listPatients.all();
     },
 
-    addVisit({ patientId, visitDate, complaint, treatment, chargeAmount, paymentAmount, paymentMethod, notes }) {
+    addVisit({ patientId, visitDate, complaint, treatment, chargeAmount, paymentAmount, paymentMethod, notes, createdByStaffId }) {
       if (!patientId) throw new Error('patientId is required');
       requireNonEmpty(visitDate, 'visitDate');
       if (!stmts.getPatientById.get(patientId)) {
@@ -224,6 +275,7 @@ function createDb(dbPath) {
         paymentAmount: paid,
         paymentMethod: paymentMethod || null,
         notes: notes || null,
+        createdByStaffId: createdByStaffId || null,
       });
       return conn.prepare('SELECT * FROM visits WHERE id = ?').get(info.lastInsertRowid);
     },
@@ -253,7 +305,7 @@ function createDb(dbPath) {
       stmts.setSetting.run({ key, value });
     },
 
-    addDrug({ name, unit, quantityOnHand, reorderLevel, expiryDate, notes }) {
+    addDrug({ name, unit, quantityOnHand, reorderLevel, expiryDate, notes, createdByStaffId }) {
       requireNonEmpty(name, 'name');
       const info = stmts.insertDrug.run({
         name: name.trim(),
@@ -262,6 +314,7 @@ function createDb(dbPath) {
         reorderLevel: Number(reorderLevel) || 0,
         expiryDate: expiryDate || null,
         notes: notes || null,
+        createdByStaffId: createdByStaffId || null,
       });
       return stmts.getDrugById.get(info.lastInsertRowid);
     },
@@ -280,7 +333,7 @@ function createDb(dbPath) {
     // Adds to stock (a new delivery arriving). If a new expiry date is
     // given it replaces the stored one — clinics track the soonest
     // expiring batch, not a full per-batch history, to keep this simple.
-    restockDrug({ drugId, quantity, expiryDate, note }) {
+    restockDrug({ drugId, quantity, expiryDate, note, createdByStaffId }) {
       const drug = stmts.getDrugById.get(drugId);
       if (!drug) throw new Error(`No drug with id ${drugId}`);
       const qty = Number(quantity);
@@ -290,7 +343,7 @@ function createDb(dbPath) {
         if (expiryDate) {
           conn.prepare('UPDATE drugs SET expiry_date = ? WHERE id = ?').run(expiryDate, drugId);
         }
-        stmts.insertMovement.run({ drugId, type: 'restock', quantity: qty, note: note || null });
+        stmts.insertMovement.run({ drugId, type: 'restock', quantity: qty, note: note || null, createdByStaffId: createdByStaffId || null });
       });
       run();
       return stmts.getDrugById.get(drugId);
@@ -298,7 +351,7 @@ function createDb(dbPath) {
 
     // Removes from stock (medicine handed to a patient). Cannot dispense
     // more than is on hand — the count must always reflect real stock.
-    dispenseDrug({ drugId, quantity, note }) {
+    dispenseDrug({ drugId, quantity, note, createdByStaffId }) {
       const drug = stmts.getDrugById.get(drugId);
       if (!drug) throw new Error(`No drug with id ${drugId}`);
       const qty = Number(quantity);
@@ -308,7 +361,7 @@ function createDb(dbPath) {
       }
       const run = conn.transaction(() => {
         stmts.updateDrugQuantity.run({ id: drugId, quantityOnHand: drug.quantity_on_hand - qty });
-        stmts.insertMovement.run({ drugId, type: 'dispense', quantity: qty, note: note || null });
+        stmts.insertMovement.run({ drugId, type: 'dispense', quantity: qty, note: note || null, createdByStaffId: createdByStaffId || null });
       });
       run();
       return stmts.getDrugById.get(drugId);
@@ -324,6 +377,49 @@ function createDb(dbPath) {
 
     listExpiringSoonDrugs() {
       return stmts.expiringSoonDrugs.all();
+    },
+
+    addStaff({ name, role, username, password }) {
+      requireNonEmpty(name, 'name');
+      requireNonEmpty(role, 'role');
+      requireNonEmpty(username, 'username');
+      requireNonEmpty(password, 'password');
+      try {
+        const info = stmts.insertStaff.run({
+          name: name.trim(),
+          role: role.trim(),
+          username: username.trim().toLowerCase(),
+          passwordHash: hashPassword(password),
+        });
+        return stmts.listStaff.all().find((s) => s.id === info.lastInsertRowid);
+      } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === 'SQLITE_CONSTRAINT') {
+          throw new Error(`Username "${username}" is already taken`);
+        }
+        throw err;
+      }
+    },
+
+    // Internal use only (session/login) — includes the password hash, so
+    // this must never be sent to the renderer.
+    getStaffByUsername(username) {
+      return stmts.getStaffByUsername.get(username.trim().toLowerCase());
+    },
+
+    getStaffById(id) {
+      return stmts.getStaffById.get(id);
+    },
+
+    listStaff() {
+      return stmts.listStaff.all();
+    },
+
+    countActiveStaff() {
+      return stmts.countActiveStaff.get().n;
+    },
+
+    setStaffActive(id, active) {
+      stmts.setStaffActive.run({ id, active: active ? 1 : 0 });
     },
 
     close() {

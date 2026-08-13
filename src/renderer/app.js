@@ -5,6 +5,20 @@ let currentPatientId = null;
 let currentDrugId = null;
 
 const els = {
+  authScreen: document.getElementById('auth-screen'),
+  appRoot: document.getElementById('app'),
+  formSetup: document.getElementById('form-setup'),
+  setupError: document.getElementById('setup-error'),
+  formLogin: document.getElementById('form-login'),
+  loginError: document.getElementById('login-error'),
+  currentStaffLabel: document.getElementById('current-staff-label'),
+  btnLogout: document.getElementById('btn-logout'),
+
+  staffTableBody: document.getElementById('staff-table-body'),
+  btnNewStaff: document.getElementById('btn-new-staff'),
+  modalNewStaff: document.getElementById('modal-new-staff'),
+  formNewStaff: document.getElementById('form-new-staff'),
+
   clinicName: document.getElementById('clinic-name'),
   navBtns: document.querySelectorAll('.nav-btn'),
   views: document.querySelectorAll('.view'),
@@ -69,6 +83,61 @@ function formatDate(isoDate) {
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
+}
+
+// ---------- Auth ----------
+
+async function initAuth() {
+  const hasStaff = await window.careledger.hasStaff();
+  els.formSetup.hidden = hasStaff;
+  els.formLogin.hidden = !hasStaff;
+}
+
+els.formSetup.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  els.setupError.hidden = true;
+  const data = Object.fromEntries(new FormData(els.formSetup));
+  try {
+    await window.careledger.addStaff(data);
+    els.formSetup.reset();
+    await enterApp();
+  } catch (err) {
+    els.setupError.textContent = err.message;
+    els.setupError.hidden = false;
+  }
+});
+
+els.formLogin.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  els.loginError.hidden = true;
+  const data = Object.fromEntries(new FormData(els.formLogin));
+  try {
+    await window.careledger.login(data.username, data.password);
+    els.formLogin.reset();
+    await enterApp();
+  } catch (err) {
+    els.loginError.textContent = err.message;
+    els.loginError.hidden = false;
+  }
+});
+
+els.btnLogout.addEventListener('click', async () => {
+  await window.careledger.logout();
+  els.appRoot.hidden = true;
+  els.authScreen.hidden = false;
+  currentPatientId = null;
+  currentDrugId = null;
+  switchView('patients');
+  await initAuth();
+});
+
+async function enterApp() {
+  const staff = await window.careledger.currentStaff();
+  els.currentStaffLabel.textContent = `${staff.name} (${staff.role})`;
+  els.authScreen.hidden = true;
+  els.appRoot.hidden = false;
+  await loadSettings();
+  await loadPatients();
 }
 
 // ---------- Patients list ----------
@@ -138,6 +207,7 @@ async function loadVisits() {
       <td>${formatMoney(v.payment_amount)}${v.payment_method ? ` (${v.payment_method})` : ''}</td>
       <td class="${balance > 0 ? 'balance-owed' : 'balance-paid'}">${formatMoney(balance)}</td>
       <td>${v.notes || ''}</td>
+      <td>${v.recorded_by_name || ''}</td>
     `;
     els.visitsTableBody.appendChild(tr);
   }
@@ -283,6 +353,7 @@ async function loadDrugMovements() {
       <td>${m.type === 'restock' ? 'Restock' : 'Dispense'}</td>
       <td>${m.type === 'dispense' ? '-' : '+'}${m.quantity}</td>
       <td>${m.note || ''}</td>
+      <td>${m.recorded_by_name || ''}</td>
     `;
     els.drugMovementsTableBody.appendChild(tr);
   }
@@ -344,6 +415,49 @@ els.settingsForm.addEventListener('submit', async (e) => {
   setTimeout(() => { els.settingsSaved.hidden = true; }, 1500);
 });
 
+// ---------- Staff management ----------
+
+async function loadStaff() {
+  const staff = await window.careledger.listStaff();
+  els.staffTableBody.innerHTML = '';
+  for (const s of staff) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.name}</td>
+      <td>${s.role}</td>
+      <td>${s.username}</td>
+      <td class="${s.active ? 'status-active' : 'status-inactive'}">${s.active ? 'Active' : 'Inactive'}</td>
+      <td></td>
+    `;
+    const actionCell = tr.lastElementChild;
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'secondary';
+    toggleBtn.textContent = s.active ? 'Deactivate' : 'Activate';
+    toggleBtn.addEventListener('click', async () => {
+      await window.careledger.setStaffActive(s.id, !s.active);
+      await loadStaff();
+    });
+    actionCell.appendChild(toggleBtn);
+    els.staffTableBody.appendChild(tr);
+  }
+}
+
+els.btnNewStaff.addEventListener('click', () => els.modalNewStaff.showModal());
+
+els.formNewStaff.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formNewStaff));
+  try {
+    await window.careledger.addStaff(data);
+    els.modalNewStaff.close();
+    els.formNewStaff.reset();
+    await loadStaff();
+  } catch (err) {
+    alert(`Could not save staff: ${err.message}`);
+  }
+});
+
 // ---------- Nav + modal close buttons ----------
 
 els.navBtns.forEach((btn) => {
@@ -352,6 +466,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'patients') loadPatients();
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();
+    if (btn.dataset.view === 'settings') loadStaff();
   });
 });
 
@@ -363,5 +478,4 @@ document.querySelectorAll('[data-close]').forEach((btn) => {
 
 // ---------- Init ----------
 
-loadSettings();
-loadPatients();
+initAuth();

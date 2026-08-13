@@ -8,6 +8,14 @@ function unwrap(promise) {
 }
 
 contextBridge.exposeInMainWorld('careledger', {
+  hasStaff: () => unwrap(ipcRenderer.invoke('auth:hasStaff')),
+  login: (username, password) => unwrap(ipcRenderer.invoke('auth:login', username, password)),
+  logout: () => unwrap(ipcRenderer.invoke('auth:logout')),
+  currentStaff: () => unwrap(ipcRenderer.invoke('auth:currentStaff')),
+  addStaff: (data) => unwrap(ipcRenderer.invoke('staff:add', data)),
+  listStaff: () => unwrap(ipcRenderer.invoke('staff:list')),
+  setStaffActive: (id, active) => unwrap(ipcRenderer.invoke('staff:setActive', id, active)),
+
   addPatient: (patient) => unwrap(ipcRenderer.invoke('patients:add', patient)),
   listPatients: (searchTerm) => unwrap(ipcRenderer.invoke('patients:list', searchTerm)),
   getPatient: (id) => unwrap(ipcRenderer.invoke('patients:get', id)),

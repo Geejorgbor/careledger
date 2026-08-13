@@ -6,15 +6,55 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
+  <!-- AUTH SCREEN (shown before anything else) -->
+  <div id="auth-screen">
+    <div class="auth-box">
+      <h1>CareLedger</h1>
+
+      <form id="form-setup" hidden>
+        <h2>Set Up Your Account</h2>
+        <p class="auth-sub">You're setting up CareLedger for the first time. Create your login — you'll use it every time you open the app.</p>
+        <label>Your Name <input name="name" required /></label>
+        <label>Role
+          <select name="role" required>
+            <option value="">--</option>
+            <option value="Doctor">Doctor</option>
+            <option value="Nurse">Nurse</option>
+            <option value="Front Desk">Front Desk</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </label>
+        <label>Username <input name="username" required autocomplete="username" /></label>
+        <label>Password <input name="password" type="password" required autocomplete="new-password" /></label>
+        <button type="submit" class="primary">Create Account &amp; Log In</button>
+        <p class="auth-error" id="setup-error" hidden></p>
+      </form>
+
+      <form id="form-login" hidden>
+        <h2>Log In</h2>
+        <label>Username <input name="username" required autocomplete="username" /></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password" /></label>
+        <button type="submit" class="primary">Log In</button>
+        <p class="auth-error" id="login-error" hidden></p>
+      </form>
+    </div>
+  </div>
+
+  <div id="app" hidden>
     <header id="app-header">
       <h1 id="clinic-name">CareLedger</h1>
-      <nav>
-        <button data-view="patients" class="nav-btn active">Patients</button>
-        <button data-view="billing" class="nav-btn">Billing</button>
-        <button data-view="dispensary" class="nav-btn">Dispensary</button>
-        <button data-view="settings" class="nav-btn">Settings</button>
-      </nav>
+      <div class="header-right">
+        <nav>
+          <button data-view="patients" class="nav-btn active">Patients</button>
+          <button data-view="billing" class="nav-btn">Billing</button>
+          <button data-view="dispensary" class="nav-btn">Dispensary</button>
+          <button data-view="settings" class="nav-btn">Settings</button>
+        </nav>
+        <div id="header-user">
+          <span id="current-staff-label"></span>
+          <button id="btn-logout" class="link-btn-white">Log Out</button>
+        </div>
+      </div>
     </header>
 
     <main>
@@ -60,6 +100,7 @@
               <th>Paid</th>
               <th>Balance</th>
               <th>Notes</th>
+              <th>Recorded By</th>
             </tr>
           </thead>
           <tbody id="visits-table-body"></tbody>
@@ -144,6 +185,7 @@
               <th>Type</th>
               <th>Quantity</th>
               <th>Note</th>
+              <th>By</th>
             </tr>
           </thead>
           <tbody id="drug-movements-table-body"></tbody>
@@ -162,6 +204,24 @@
           <button type="submit" class="primary">Save</button>
         </form>
         <p id="settings-saved" class="empty-state" hidden>Saved.</p>
+
+        <h2>Staff Accounts</h2>
+        <div class="toolbar">
+          <div></div>
+          <button id="btn-new-staff" class="primary">+ Add Staff</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Username</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="staff-table-body"></tbody>
+        </table>
       </section>
     </main>
   </div>
@@ -255,6 +315,29 @@
       <label>Note <input name="note" placeholder="e.g. handed to patient" /></label>
       <div class="modal-actions">
         <button type="button" class="cancel-btn" data-close="modal-dispense-drug">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- NEW STAFF MODAL -->
+  <dialog id="modal-new-staff">
+    <form id="form-new-staff">
+      <h2>Add Staff</h2>
+      <label>Name <input name="name" required /></label>
+      <label>Role
+        <select name="role" required>
+          <option value="">--</option>
+          <option value="Doctor">Doctor</option>
+          <option value="Nurse">Nurse</option>
+          <option value="Front Desk">Front Desk</option>
+          <option value="Admin">Admin</option>
+        </select>
+      </label>
+      <label>Username <input name="username" required autocomplete="off" /></label>
+      <label>Password <input name="password" type="password" required autocomplete="new-password" /></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-new-staff">Cancel</button>
         <button type="submit" class="primary">Save</button>
       </div>
     </form>

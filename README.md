@@ -44,12 +44,29 @@ together — so the program doesn't live only in one person's head.
 - The drug list flags **low stock** (at or under the reorder level) and
   **expiring soon** (within 30 days) right in the table, in red/orange.
 
+**Phase 4 — Staff Logins & Security**
+- The very first time CareLedger is opened, it asks you to set up your own
+  account (name, role, username, password) instead of coming with any
+  built-in login — there's nothing to guess or hack. Every time after that,
+  it asks you to log in.
+- Passwords are salted and hashed (Node's built-in `crypto.scrypt`) — never
+  stored or shown as plain text, not even to other staff.
+- Once logged in, a staff member can add more accounts from **Settings →
+  Staff Accounts**, and deactivate one without deleting it (their name stays
+  attached to their past records, but they can no longer log in).
+- Every patient, visit, drug, and stock movement now remembers **who**
+  recorded it — shown as "Recorded By" / "By" in the visit history and
+  stock movement tables.
+- This isn't just hidden in the screen — the login check happens in the
+  program's core (`ipc.js`), so there's no way to see or change clinic data
+  without being logged in, even if someone tried to bypass the screen.
+
 Everything is stored in a single SQLite file on the clinic's own computer.
 No internet connection is needed for any of this to work — that's the whole
 point of CareLedger, and it will stay true as more phases are added.
 
-Not built yet (see the product plan for the full order): Staff Logins &
-Security, Reports & Dashboard, cloud backup, phone access.
+Not built yet (see the product plan for the full order): Reports &
+Dashboard, cloud backup, phone access.
 
 ## How to run it
 
@@ -69,10 +86,15 @@ npm start         # opens the CareLedger window
 
 - **`src/main/`** — the "backend" that runs on the clinic's computer.
   - `db.js` — everything about the database: the tables (patients, visits,
-    settings) and every read/write function. This is the only file that
-    talks to SQLite directly.
-  - `ipc.js` — connects the on-screen buttons/forms to `db.js`. Every action
-    (like "add a patient") passes through here.
+    settings, staff) and every read/write function. This is the only file
+    that talks to SQLite directly.
+  - `auth.js` — password hashing/checking only (no database, no Electron —
+    just the math for keeping passwords safe).
+  - `session.js` — remembers who is currently logged in for this run of the
+    app, and refuses actions when nobody is.
+  - `ipc.js` — connects the on-screen buttons/forms to `db.js`, gated by
+    `session.js` — every action (like "add a patient") passes through here
+    and is checked and stamped with who did it.
   - `main.js` — opens the app window and starts everything up.
 - **`src/preload/preload.js`** — a safety bridge. It only lets the screen
   call the specific actions listed here (add patient, list patients, etc.),
@@ -129,5 +151,6 @@ so this should rarely come up by hand.)
 
 ## Next step
 
-Phase 4 — Staff Logins & Security: separate logins for doctor, nurse, and
-front desk, so the clinic knows who did what.
+Phase 5 — Reports & Dashboard: the automatic "wow" screen — patients seen
+this week, top illnesses, income, drugs finishing/expiring — tying together
+everything built so far without any manual calculating.

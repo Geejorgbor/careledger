@@ -2,6 +2,7 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { createDb } = require('./db');
 const { registerIpcHandlers } = require('./ipc');
+const { createSession } = require('./session');
 
 let mainWindow;
 let db;
@@ -31,7 +32,8 @@ function createWindow() {
 
 app.whenReady().then(() => {
   db = createDb(getDbPath());
-  registerIpcHandlers(db);
+  const session = createSession(db);
+  registerIpcHandlers(db, session);
   createWindow();
 
   app.on('activate', () => {
