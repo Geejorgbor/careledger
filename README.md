@@ -101,10 +101,17 @@ configured the same way, but each has to actually be *built* on that
 platform (or via a Mac/Windows CI machine) — a Linux computer can't produce
 a working `.exe`/`.dmg` on its own.
 
+**Printable Receipts** — every visit in a patient's history has a **Print
+Receipt** button. It brings up a clean, print-only page — clinic name,
+patient, visit date, complaint/treatment, amount charged/paid, and who
+served them — with everything else on screen hidden, so what prints is
+just the receipt. Works with a real printer or "Print to PDF" (built into
+every computer's print dialog) to save/share one digitally.
+
 All five build-order phases from the original product plan are now built,
-plus the automatic backup safeguard from Section 6 and packaging. What's
-left is what the plan calls the "optional extra layer": cloud backup and
-phone access.
+plus the automatic backup safeguard from Section 6, packaging, and
+printable receipts. What's left is what the plan calls the "optional extra
+layer": cloud backup and phone access.
 
 ## How to run it
 

@@ -2,6 +2,7 @@
 // sections; state lives in a few module-level variables.
 
 let currentPatientId = null;
+let currentPatient = null;
 let currentDrugId = null;
 
 const els = {
@@ -238,6 +239,7 @@ els.formNewPatient.addEventListener('submit', async (e) => {
 async function openPatientDetail(patientId) {
   currentPatientId = patientId;
   const patient = await window.careledger.getPatient(patientId);
+  currentPatient = patient;
   els.detailPatientName.textContent = `${patient.first_name} ${patient.last_name}`;
   const metaParts = [];
   if (patient.date_of_birth) metaParts.push(`DOB: ${patient.date_of_birth}`);
@@ -266,13 +268,44 @@ async function loadVisits() {
       <td class="${balance > 0 ? 'balance-owed' : 'balance-paid'}">${formatMoney(balance)}</td>
       <td>${v.notes || ''}</td>
       <td>${v.recorded_by_name || ''}</td>
+      <td></td>
     `;
+    const printCell = tr.lastElementChild;
+    const printBtn = document.createElement('button');
+    printBtn.type = 'button';
+    printBtn.className = 'btn-print';
+    printBtn.textContent = 'Print Receipt';
+    printBtn.addEventListener('click', () => printReceipt(v));
+    printCell.appendChild(printBtn);
     els.visitsTableBody.appendChild(tr);
   }
 }
 
+function printReceipt(visit) {
+  const balance = visit.charge_amount - visit.payment_amount;
+  const rows = [
+    ['Patient', `${currentPatient.first_name} ${currentPatient.last_name}`],
+    ['Visit Date', formatDate(visit.visit_date)],
+  ];
+  if (visit.complaint) rows.push(['Complaint', visit.complaint]);
+  if (visit.treatment) rows.push(['Treatment', visit.treatment]);
+  rows.push(['Amount Charged', formatMoney(visit.charge_amount)]);
+  rows.push(['Amount Paid', `${formatMoney(visit.payment_amount)}${visit.payment_method ? ` (${visit.payment_method})` : ''}`]);
+  if (balance > 0) rows.push(['Balance Owed', formatMoney(balance)]);
+  if (visit.recorded_by_name) rows.push(['Served By', visit.recorded_by_name]);
+  rows.push(['Printed', new Date().toLocaleString()]);
+
+  document.getElementById('receipt-clinic-name').textContent = els.clinicName.textContent || 'CareLedger';
+  document.getElementById('receipt-fields').innerHTML = rows
+    .map(([label, value]) => `<tr><td>${label}</td><td>${value}</td></tr>`)
+    .join('');
+
+  window.print();
+}
+
 els.btnBackToPatients.addEventListener('click', () => {
   currentPatientId = null;
+  currentPatient = null;
   switchView('patients');
   loadPatients();
 });

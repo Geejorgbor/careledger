@@ -226,6 +226,7 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   justify-content: center;
   background: var(--color-bg);
 }
+#auth-screen[hidden] { display: none; }
 
 .auth-box {
   width: 380px;
@@ -252,3 +253,41 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
 
 .status-active { color: var(--color-primary-dark); font-weight: 600; }
 .status-inactive { color: var(--color-text-muted); }
+
+.btn-print {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-primary-dark);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-print:hover { background: #f0f5f2; }
+
+/* The receipt only exists to be printed — invisible in the normal app UI. */
+#receipt-print-area { display: none; }
+
+@media print {
+  /* Hide everything on the page except the receipt, without disturbing
+     the receipt's own layout (the usual robust trick for "print just this
+     one part of the page"). */
+  body * { visibility: hidden; }
+  #receipt-print-area, #receipt-print-area * { visibility: visible; }
+  #receipt-print-area {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 32px;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: #000;
+  }
+  #receipt-clinic-name { font-size: 20px; margin: 0 0 4px 0; }
+  #receipt-title { font-size: 14px; color: #444; margin-bottom: 20px; }
+  #receipt-fields { width: 100%; border-collapse: collapse; }
+  #receipt-fields td { padding: 6px 0; border-bottom: 1px solid #ddd; font-size: 13px; }
+  #receipt-fields td:first-child { color: #444; width: 40%; }
+  #receipt-footer { margin-top: 24px; font-size: 13px; color: #444; }
+}

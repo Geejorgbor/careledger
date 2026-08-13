@@ -150,6 +150,7 @@
               <th>Balance</th>
               <th>Notes</th>
               <th>Recorded By</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="visits-table-body"></tbody>
@@ -402,6 +403,14 @@
       </div>
     </form>
   </dialog>
+
+  <!-- PRINT-ONLY RECEIPT (invisible on screen, shown only by @media print) -->
+  <div id="receipt-print-area">
+    <h1 id="receipt-clinic-name"></h1>
+    <div id="receipt-title">Payment Receipt</div>
+    <table id="receipt-fields"></table>
+    <div id="receipt-footer">Thank you.</div>
+  </div>
 
   <script src="app.js"></script>
 </body>
