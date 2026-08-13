@@ -245,6 +245,7 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   flex-direction: column;
   gap: 12px;
 }
+#form-setup[hidden], #form-login[hidden] { display: none; }
 #form-setup label, #form-login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
 
 .auth-error { color: #b3261e; font-size: 13px; margin: 4px 0 0 0; }
