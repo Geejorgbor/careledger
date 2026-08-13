@@ -28,6 +28,12 @@ const els = {
   formNewPatient: document.getElementById('form-new-patient'),
   modalNewVisit: document.getElementById('modal-new-visit'),
   formNewVisit: document.getElementById('form-new-visit'),
+
+  incomeToday: document.getElementById('income-today'),
+  incomeWeek: document.getElementById('income-week'),
+  incomeMonth: document.getElementById('income-month'),
+  outstandingTableBody: document.getElementById('outstanding-table-body'),
+  outstandingEmpty: document.getElementById('outstanding-empty'),
 };
 
 function switchView(name) {
@@ -102,11 +108,14 @@ async function loadVisits() {
   els.visitsEmpty.hidden = visits.length > 0;
   for (const v of visits) {
     const tr = document.createElement('tr');
+    const balance = v.charge_amount - v.payment_amount;
     tr.innerHTML = `
       <td>${formatDate(v.visit_date)}</td>
       <td>${v.complaint || ''}</td>
       <td>${v.treatment || ''}</td>
+      <td>${formatMoney(v.charge_amount)}</td>
       <td>${formatMoney(v.payment_amount)}${v.payment_method ? ` (${v.payment_method})` : ''}</td>
+      <td class="${balance > 0 ? 'balance-owed' : 'balance-paid'}">${formatMoney(balance)}</td>
       <td>${v.notes || ''}</td>
     `;
     els.visitsTableBody.appendChild(tr);
@@ -122,7 +131,22 @@ els.btnBackToPatients.addEventListener('click', () => {
 els.btnNewVisit.addEventListener('click', () => {
   const dateInput = els.formNewVisit.elements['visitDate'];
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  paidAmountManuallyEdited = false;
   els.modalNewVisit.showModal();
+});
+
+// Most visits are paid in full on the spot, so typing the charge amount
+// also fills in the paid amount — unless the person has already typed
+// something different into "Amount Paid Today" themselves (a partial
+// payment), in which case we leave their input alone.
+let paidAmountManuallyEdited = false;
+const chargeAmountInput = els.formNewVisit.elements['chargeAmount'];
+const paymentAmountInput = els.formNewVisit.elements['paymentAmount'];
+chargeAmountInput.addEventListener('input', () => {
+  if (!paidAmountManuallyEdited) paymentAmountInput.value = chargeAmountInput.value;
+});
+paymentAmountInput.addEventListener('input', () => {
+  paidAmountManuallyEdited = true;
 });
 
 els.formNewVisit.addEventListener('submit', async (e) => {
@@ -138,6 +162,31 @@ els.formNewVisit.addEventListener('submit', async (e) => {
     alert(`Could not save visit: ${err.message}`);
   }
 });
+
+// ---------- Billing ----------
+
+async function loadBilling() {
+  const income = await window.careledger.getIncomeSummary();
+  els.incomeToday.textContent = formatMoney(income.today);
+  els.incomeWeek.textContent = formatMoney(income.thisWeek);
+  els.incomeMonth.textContent = formatMoney(income.thisMonth);
+
+  const outstanding = await window.careledger.listOutstandingBalances();
+  els.outstandingTableBody.innerHTML = '';
+  els.outstandingEmpty.hidden = outstanding.length > 0;
+  for (const o of outstanding) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${o.first_name} ${o.last_name}</td>
+      <td>${formatDate(o.visit_date)}</td>
+      <td>${formatMoney(o.charge_amount)}</td>
+      <td>${formatMoney(o.payment_amount)}</td>
+      <td class="balance-owed">${formatMoney(o.balance)}</td>
+    `;
+    tr.addEventListener('click', () => openPatientDetail(o.patient_id));
+    els.outstandingTableBody.appendChild(tr);
+  }
+}
 
 // ---------- Settings (white-label foundation) ----------
 
@@ -164,6 +213,7 @@ els.navBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     switchView(btn.dataset.view);
     if (btn.dataset.view === 'patients') loadPatients();
+    if (btn.dataset.view === 'billing') loadBilling();
   });
 });
 

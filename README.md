@@ -7,23 +7,36 @@ Offline-first clinic management system. Built by PayeConnect Digital Solutions.
 This document explains what's built so far, how to run it, and how it's put
 together — so the program doesn't live only in one person's head.
 
-## What's built (Phase 1 — Patients & Visits)
+## What's built
 
+**Phase 1 — Patients & Visits**
 - Register a patient (name, date of birth, gender, phone, address)
 - Search/list patients by name or phone
 - Open a patient and see their full visit history
-- Record a visit (date, complaint, treatment, payment amount + method, notes)
 - Clinic name setting (the foundation for white-labeling — Section 7 of the
   product plan). Each clinic's copy can show its own name; a logo can be
   added the same way later.
+
+**Phase 2 — Billing & Payments**
+- Every visit now records what was **charged** and what was **paid** —
+  separately, so a partial payment leaves a visible balance owed instead of
+  quietly disappearing. Typing an amount charged auto-fills the amount paid
+  (most visits are paid in full on the spot), but it can always be edited
+  for a partial payment.
+- A **Billing** tab showing today's / this week's / this month's income
+  (money actually collected, not just charged), and a list of every
+  outstanding balance across all patients — click one to jump straight to
+  that patient.
+- Older databases from before this phase are upgraded automatically the
+  first time they're opened (existing visits are treated as paid in full —
+  see `runMigrations` in `db.js`). No data is ever lost or rewritten.
 
 Everything is stored in a single SQLite file on the clinic's own computer.
 No internet connection is needed for any of this to work — that's the whole
 point of CareLedger, and it will stay true as more phases are added.
 
-Not built yet (see the product plan for the full order): Billing/Payments
-reporting, Drug Dispensary, Staff Logins & Security, Reports & Dashboard,
-cloud backup, phone access.
+Not built yet (see the product plan for the full order): Drug Dispensary,
+Staff Logins & Security, Reports & Dashboard, cloud backup, phone access.
 
 ## How to run it
 
@@ -103,5 +116,6 @@ so this should rarely come up by hand.)
 
 ## Next step
 
-Phase 2 — Billing & Payments: turning the payment already recorded on each
-visit into real daily/weekly/monthly income totals for the clinic.
+Phase 3 — Drug Dispensary: stock and expiry tracking for medicine the
+clinic hands out. This also doubles as the engine the future pharmacy
+product will need.

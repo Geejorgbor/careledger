@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS visits (
   visit_date TEXT NOT NULL,
   complaint TEXT,
   treatment TEXT,
+  charge_amount REAL NOT NULL DEFAULT 0,
   payment_amount REAL NOT NULL DEFAULT 0,
   payment_method TEXT,
   notes TEXT,
@@ -34,6 +35,22 @@ CREATE TABLE IF NOT EXISTS visits (
 CREATE INDEX IF NOT EXISTS idx_visits_patient_id ON visits(patient_id);
 CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(last_name, first_name);
 `;
+
+/**
+ * Brings an older database file up to the current schema. Only ever adds
+ * columns and backfills them — never drops or rewrites existing data, so a
+ * clinic's real records are never at risk when the app is updated.
+ */
+function runMigrations(conn) {
+  const visitCols = conn.prepare("PRAGMA table_info(visits)").all().map((c) => c.name);
+  if (!visitCols.includes('charge_amount')) {
+    conn.exec('ALTER TABLE visits ADD COLUMN charge_amount REAL');
+    // Phase 1 only ever recorded a single payment figure, which was always
+    // treated as "paid in full" — so that's the correct backfill for what
+    // was owed on those older visits.
+    conn.exec('UPDATE visits SET charge_amount = payment_amount WHERE charge_amount IS NULL');
+  }
+}
 
 /**
  * Opens (creating if needed) the CareLedger SQLite database and returns
@@ -47,6 +64,7 @@ function createDb(dbPath) {
   conn.pragma('journal_mode = WAL');
   conn.pragma('foreign_keys = ON');
   conn.exec(SCHEMA);
+  runMigrations(conn);
 
   const stmts = {
     insertPatient: conn.prepare(`
@@ -64,8 +82,8 @@ function createDb(dbPath) {
       SELECT * FROM patients ORDER BY last_name, first_name LIMIT 200
     `),
     insertVisit: conn.prepare(`
-      INSERT INTO visits (patient_id, visit_date, complaint, treatment, payment_amount, payment_method, notes)
-      VALUES (@patientId, @visitDate, @complaint, @treatment, @paymentAmount, @paymentMethod, @notes)
+      INSERT INTO visits (patient_id, visit_date, complaint, treatment, charge_amount, payment_amount, payment_method, notes)
+      VALUES (@patientId, @visitDate, @complaint, @treatment, @chargeAmount, @paymentAmount, @paymentMethod, @notes)
     `),
     getVisitsForPatient: conn.prepare(`
       SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC, id DESC
@@ -74,6 +92,33 @@ function createDb(dbPath) {
     setSetting: conn.prepare(`
       INSERT INTO settings (key, value) VALUES (@key, @value)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `),
+    incomeToday: conn.prepare(`
+      SELECT COALESCE(SUM(payment_amount), 0) AS total FROM visits
+      WHERE visit_date = date('now', 'localtime')
+    `),
+    incomeThisWeek: conn.prepare(`
+      SELECT COALESCE(SUM(payment_amount), 0) AS total FROM visits
+      WHERE visit_date >= date('now', 'localtime', 'weekday 0', '-6 days')
+    `),
+    incomeThisMonth: conn.prepare(`
+      SELECT COALESCE(SUM(payment_amount), 0) AS total FROM visits
+      WHERE visit_date >= date('now', 'localtime', 'start of month')
+    `),
+    outstandingBalances: conn.prepare(`
+      SELECT
+        v.id AS visit_id,
+        v.visit_date,
+        v.charge_amount,
+        v.payment_amount,
+        (v.charge_amount - v.payment_amount) AS balance,
+        p.id AS patient_id,
+        p.first_name,
+        p.last_name
+      FROM visits v
+      JOIN patients p ON p.id = v.patient_id
+      WHERE v.charge_amount > v.payment_amount
+      ORDER BY v.visit_date DESC
     `),
   };
 
@@ -109,18 +154,25 @@ function createDb(dbPath) {
       return stmts.listPatients.all();
     },
 
-    addVisit({ patientId, visitDate, complaint, treatment, paymentAmount, paymentMethod, notes }) {
+    addVisit({ patientId, visitDate, complaint, treatment, chargeAmount, paymentAmount, paymentMethod, notes }) {
       if (!patientId) throw new Error('patientId is required');
       requireNonEmpty(visitDate, 'visitDate');
       if (!stmts.getPatientById.get(patientId)) {
         throw new Error(`No patient with id ${patientId}`);
       }
+      const paid = Number(paymentAmount) || 0;
+      // If no charge is given, assume the visit was charged exactly what
+      // was paid (the common case: pay in full on the spot).
+      const charged = chargeAmount === undefined || chargeAmount === null || chargeAmount === ''
+        ? paid
+        : Number(chargeAmount) || 0;
       const info = stmts.insertVisit.run({
         patientId,
         visitDate,
         complaint: complaint || null,
         treatment: treatment || null,
-        paymentAmount: Number(paymentAmount) || 0,
+        chargeAmount: charged,
+        paymentAmount: paid,
         paymentMethod: paymentMethod || null,
         notes: notes || null,
       });
@@ -129,6 +181,18 @@ function createDb(dbPath) {
 
     getVisitsForPatient(patientId) {
       return stmts.getVisitsForPatient.all(patientId);
+    },
+
+    getIncomeSummary() {
+      return {
+        today: stmts.incomeToday.get().total,
+        thisWeek: stmts.incomeThisWeek.get().total,
+        thisMonth: stmts.incomeThisMonth.get().total,
+      };
+    },
+
+    listOutstandingBalances() {
+      return stmts.outstandingBalances.all();
     },
 
     getSetting(key) {

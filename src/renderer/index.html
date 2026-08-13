@@ -11,6 +11,7 @@
       <h1 id="clinic-name">CareLedger</h1>
       <nav>
         <button data-view="patients" class="nav-btn active">Patients</button>
+        <button data-view="billing" class="nav-btn">Billing</button>
         <button data-view="settings" class="nav-btn">Settings</button>
       </nav>
     </header>
@@ -54,13 +55,49 @@
               <th>Date</th>
               <th>Complaint</th>
               <th>Treatment</th>
-              <th>Payment</th>
+              <th>Charged</th>
+              <th>Paid</th>
+              <th>Balance</th>
               <th>Notes</th>
             </tr>
           </thead>
           <tbody id="visits-table-body"></tbody>
         </table>
         <p id="visits-empty" class="empty-state" hidden>No visits recorded yet.</p>
+      </section>
+
+      <!-- BILLING VIEW -->
+      <section id="view-billing" class="view">
+        <h2>Billing &amp; Payments</h2>
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-label">Today</div>
+            <div class="stat-value" id="income-today">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">This Week</div>
+            <div class="stat-value" id="income-week">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">This Month</div>
+            <div class="stat-value" id="income-month">$0.00</div>
+          </div>
+        </div>
+
+        <h3>Outstanding Balances</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>Visit Date</th>
+              <th>Charged</th>
+              <th>Paid</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
+          <tbody id="outstanding-table-body"></tbody>
+        </table>
+        <p id="outstanding-empty" class="empty-state" hidden>Nothing owed right now — every visit is paid in full.</p>
       </section>
 
       <!-- SETTINGS VIEW -->
@@ -109,7 +146,8 @@
       <label>Visit Date <input name="visitDate" type="date" required /></label>
       <label>Complaint <input name="complaint" /></label>
       <label>Treatment <input name="treatment" /></label>
-      <label>Payment Amount <input name="paymentAmount" type="number" step="0.01" min="0" value="0" /></label>
+      <label>Amount Charged <input name="chargeAmount" type="number" step="0.01" min="0" value="0" /></label>
+      <label>Amount Paid Today <input name="paymentAmount" type="number" step="0.01" min="0" value="0" /></label>
       <label>Payment Method
         <select name="paymentMethod">
           <option value="">--</option>

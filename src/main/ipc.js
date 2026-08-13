@@ -21,6 +21,8 @@ function registerIpcHandlers(db) {
   handle('patients:get', (id) => db.getPatient(id));
   handle('visits:add', (visit) => db.addVisit(visit));
   handle('visits:listForPatient', (patientId) => db.getVisitsForPatient(patientId));
+  handle('billing:incomeSummary', () => db.getIncomeSummary());
+  handle('billing:outstandingBalances', () => db.listOutstandingBalances());
   handle('settings:get', (key) => db.getSetting(key));
   handle('settings:set', (key, value) => db.setSetting(key, value));
 }

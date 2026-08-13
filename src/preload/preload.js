@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('careledger', {
   getPatient: (id) => unwrap(ipcRenderer.invoke('patients:get', id)),
   addVisit: (visit) => unwrap(ipcRenderer.invoke('visits:add', visit)),
   listVisitsForPatient: (patientId) => unwrap(ipcRenderer.invoke('visits:listForPatient', patientId)),
+  getIncomeSummary: () => unwrap(ipcRenderer.invoke('billing:incomeSummary')),
+  listOutstandingBalances: () => unwrap(ipcRenderer.invoke('billing:outstandingBalances')),
   getSetting: (key) => unwrap(ipcRenderer.invoke('settings:get', key)),
   setSetting: (key, value) => unwrap(ipcRenderer.invoke('settings:set', key, value)),
 });
