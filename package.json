@@ -1,0 +1,21 @@
+{
+  "name": "careledger",
+  "version": "0.1.0",
+  "description": "Offline-first clinic management system for patients, visits, billing, dispensary, and reports.",
+  "author": "PayeConnect Digital Solutions",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test:db": "ELECTRON_RUN_AS_NODE=1 electron test/db.test.js",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "electron": "^31.0.0"
+  }
+}
