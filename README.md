@@ -61,12 +61,27 @@ together — so the program doesn't live only in one person's head.
   program's core (`ipc.js`), so there's no way to see or change clinic data
   without being logged in, even if someone tried to bypass the screen.
 
+**Phase 5 — Reports & Dashboard**
+- Logging in now opens straight to a **Dashboard** — the "automatic magic"
+  the product plan asked for. Nothing here is new data; it's all totals
+  pulled together from patients, visits, and drugs so nobody has to add
+  anything up by hand.
+- Four numbers at a glance: patients seen today, patients seen this week
+  (each patient counted once, even with multiple visits), today's money
+  collected, and how many things need attention.
+- **Top Illnesses This Week** — the most common complaints from this
+  week's visits, most-seen first.
+- **Needs Attention** — every low-stock or soon-to-expire medicine in one
+  list, click one to jump straight to that drug.
+
 Everything is stored in a single SQLite file on the clinic's own computer.
 No internet connection is needed for any of this to work — that's the whole
 point of CareLedger, and it will stay true as more phases are added.
 
-Not built yet (see the product plan for the full order): Reports &
-Dashboard, cloud backup, phone access.
+All five phases from the original product plan are now built. What's left
+is what the plan calls the "optional extra layer": cloud backup and phone
+access — features that add convenience on top of an app that already works
+completely offline.
 
 ## How to run it
 
@@ -151,6 +166,8 @@ so this should rarely come up by hand.)
 
 ## Next step
 
-Phase 5 — Reports & Dashboard: the automatic "wow" screen — patients seen
-this week, top illnesses, income, drugs finishing/expiring — tying together
-everything built so far without any manual calculating.
+All five build-order phases from the product plan are done. Natural next
+steps: automatic backup (to a second location, a flash drive, and the
+cloud when internet is available — Section 6's biggest safeguard), and
+packaging the app so a clinic can install it without needing Node.js at
+all.

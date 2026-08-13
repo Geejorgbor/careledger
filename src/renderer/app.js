@@ -14,6 +14,15 @@ const els = {
   currentStaffLabel: document.getElementById('current-staff-label'),
   btnLogout: document.getElementById('btn-logout'),
 
+  dashPatientsToday: document.getElementById('dash-patients-today'),
+  dashPatientsWeek: document.getElementById('dash-patients-week'),
+  dashIncomeToday: document.getElementById('dash-income-today'),
+  dashNeedsAttention: document.getElementById('dash-needs-attention'),
+  dashIllnessesTableBody: document.getElementById('dash-illnesses-table-body'),
+  dashIllnessesEmpty: document.getElementById('dash-illnesses-empty'),
+  dashAttentionTableBody: document.getElementById('dash-attention-table-body'),
+  dashAttentionEmpty: document.getElementById('dash-attention-empty'),
+
   staffTableBody: document.getElementById('staff-table-body'),
   btnNewStaff: document.getElementById('btn-new-staff'),
   modalNewStaff: document.getElementById('modal-new-staff'),
@@ -127,7 +136,7 @@ els.btnLogout.addEventListener('click', async () => {
   els.authScreen.hidden = false;
   currentPatientId = null;
   currentDrugId = null;
-  switchView('patients');
+  switchView('dashboard');
   await initAuth();
 });
 
@@ -136,8 +145,53 @@ async function enterApp() {
   els.currentStaffLabel.textContent = `${staff.name} (${staff.role})`;
   els.authScreen.hidden = true;
   els.appRoot.hidden = false;
+  switchView('dashboard');
   await loadSettings();
-  await loadPatients();
+  await loadDashboard();
+}
+
+// ---------- Dashboard ----------
+
+async function loadDashboard() {
+  const summary = await window.careledger.getDashboardSummary();
+  els.dashPatientsToday.textContent = summary.patientsToday;
+  els.dashPatientsWeek.textContent = summary.patientsThisWeek;
+  els.dashIncomeToday.textContent = formatMoney(summary.incomeToday);
+
+  const attentionItems = [
+    ...summary.lowStockDrugs.map((d) => ({
+      drug: d,
+      why: 'Low Stock',
+      detail: `${d.quantity_on_hand} ${d.unit || 'unit(s)'} left (reorder at ${d.reorder_level})`,
+    })),
+    ...summary.expiringSoonDrugs.map((d) => ({
+      drug: d,
+      why: 'Expiring Soon',
+      detail: `Expires ${d.expiry_date}`,
+    })),
+  ];
+  els.dashNeedsAttention.textContent = attentionItems.length;
+
+  els.dashIllnessesTableBody.innerHTML = '';
+  els.dashIllnessesEmpty.hidden = summary.topIllnessesThisWeek.length > 0;
+  for (const row of summary.topIllnessesThisWeek) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.complaint}</td><td>${row.n}</td>`;
+    els.dashIllnessesTableBody.appendChild(tr);
+  }
+
+  els.dashAttentionTableBody.innerHTML = '';
+  els.dashAttentionEmpty.hidden = attentionItems.length > 0;
+  for (const item of attentionItems) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${item.drug.name}</td>
+      <td class="${item.why === 'Low Stock' ? 'stock-low' : 'stock-expiring'}">${item.why}</td>
+      <td>${item.detail}</td>
+    `;
+    tr.addEventListener('click', () => openDrugDetail(item.drug.id));
+    els.dashAttentionTableBody.appendChild(tr);
+  }
 }
 
 // ---------- Patients list ----------
@@ -463,6 +517,7 @@ els.formNewStaff.addEventListener('submit', async (e) => {
 els.navBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     switchView(btn.dataset.view);
+    if (btn.dataset.view === 'dashboard') loadDashboard();
     if (btn.dataset.view === 'patients') loadPatients();
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();

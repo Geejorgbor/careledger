@@ -160,6 +160,22 @@ function createDb(dbPath) {
       SELECT COALESCE(SUM(payment_amount), 0) AS total FROM visits
       WHERE visit_date >= date('now', 'localtime', 'start of month')
     `),
+    patientsSeenToday: conn.prepare(`
+      SELECT COUNT(DISTINCT patient_id) AS n FROM visits
+      WHERE visit_date = date('now', 'localtime')
+    `),
+    patientsSeenThisWeek: conn.prepare(`
+      SELECT COUNT(DISTINCT patient_id) AS n FROM visits
+      WHERE visit_date >= date('now', 'localtime', 'weekday 0', '-6 days')
+    `),
+    topIllnessesThisWeek: conn.prepare(`
+      SELECT complaint, COUNT(*) AS n FROM visits
+      WHERE visit_date >= date('now', 'localtime', 'weekday 0', '-6 days')
+        AND complaint IS NOT NULL AND trim(complaint) != ''
+      GROUP BY complaint
+      ORDER BY n DESC, complaint
+      LIMIT 5
+    `),
     outstandingBalances: conn.prepare(`
       SELECT
         v.id AS visit_id,
@@ -289,6 +305,20 @@ function createDb(dbPath) {
         today: stmts.incomeToday.get().total,
         thisWeek: stmts.incomeThisWeek.get().total,
         thisMonth: stmts.incomeThisMonth.get().total,
+      };
+    },
+
+    // The one-screen "automatic magic" summary — nothing here is new data,
+    // it's all totals and lists pulled together from patients/visits/drugs
+    // so nobody has to add anything up by hand.
+    getDashboardSummary() {
+      return {
+        patientsToday: stmts.patientsSeenToday.get().n,
+        patientsThisWeek: stmts.patientsSeenThisWeek.get().n,
+        incomeToday: stmts.incomeToday.get().total,
+        topIllnessesThisWeek: stmts.topIllnessesThisWeek.all(),
+        lowStockDrugs: stmts.lowStockDrugs.all(),
+        expiringSoonDrugs: stmts.expiringSoonDrugs.all(),
       };
     },
 

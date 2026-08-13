@@ -71,6 +71,12 @@ function registerIpcHandlers(db, session) {
     return db.getVisitsForPatient(patientId);
   });
 
+  // ---------- Dashboard ----------
+  handle('dashboard:summary', () => {
+    session.requireLogin();
+    return db.getDashboardSummary();
+  });
+
   // ---------- Billing ----------
   handle('billing:incomeSummary', () => {
     session.requireLogin();

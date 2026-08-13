@@ -318,6 +318,45 @@ function run() {
   fs.rmSync(`${legacyDb2Path}-wal`, { force: true });
   fs.rmSync(`${legacyDb2Path}-shm`, { force: true });
 
+  // Dashboard: the "automatic magic" summary, on its own isolated db so the
+  // counts are exact and easy to reason about.
+  const db3 = createDb(':memory:');
+  const alice = db3.addPatient({ firstName: 'Alice', lastName: 'A' });
+  const bob = db3.addPatient({ firstName: 'Bob', lastName: 'B' });
+  const carol = db3.addPatient({ firstName: 'Carol', lastName: 'C' });
+
+  // Two visits today for Alice (same patient twice) should count as ONE
+  // patient seen today, not two.
+  db3.addVisit({ patientId: alice.id, visitDate: today, complaint: 'Fever', paymentAmount: 20 });
+  db3.addVisit({ patientId: alice.id, visitDate: today, complaint: 'Fever', paymentAmount: 5 });
+  db3.addVisit({ patientId: bob.id, visitDate: today, complaint: 'Cough', paymentAmount: 10 });
+  // A week-old-but-not-today visit still counts for "this week" and for
+  // top illnesses, just not for "today".
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  db3.addVisit({ patientId: carol.id, visitDate: threeDaysAgo, complaint: 'Fever', paymentAmount: 8 });
+
+  db3.addDrug({ name: 'Low Stock Drug', quantityOnHand: 2, reorderLevel: 10 });
+  db3.addDrug({ name: 'Expiring Drug', quantityOnHand: 100, reorderLevel: 10, expiryDate: soonDate });
+  db3.addDrug({ name: 'Healthy Drug', quantityOnHand: 100, reorderLevel: 10, expiryDate: farDate });
+
+  const summary = db3.getDashboardSummary();
+  assert.strictEqual(summary.patientsToday, 2, 'Alice (once, despite 2 visits) + Bob seen today');
+  assert.strictEqual(summary.patientsThisWeek, 3, 'Alice + Bob + Carol all seen within the week');
+  assert.strictEqual(summary.incomeToday, 35, "today's income should only count today's visits (20 + 5 + 10)");
+
+  assert.strictEqual(summary.topIllnessesThisWeek[0].complaint, 'Fever');
+  assert.strictEqual(summary.topIllnessesThisWeek[0].n, 3, 'Fever appears on 3 visits this week (2 today + 1 three days ago)');
+  assert.strictEqual(summary.topIllnessesThisWeek[1].complaint, 'Cough');
+  assert.strictEqual(summary.topIllnessesThisWeek[1].n, 1);
+
+  assert.strictEqual(summary.lowStockDrugs.length, 1);
+  assert.strictEqual(summary.lowStockDrugs[0].name, 'Low Stock Drug');
+  assert.strictEqual(summary.expiringSoonDrugs.length, 1);
+  assert.strictEqual(summary.expiringSoonDrugs[0].name, 'Expiring Drug');
+  // Healthy Drug should appear in neither list.
+
+  db3.close();
+
   console.log('All db.js tests passed.');
 }
 

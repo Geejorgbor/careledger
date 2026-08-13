@@ -45,7 +45,8 @@
       <h1 id="clinic-name">CareLedger</h1>
       <div class="header-right">
         <nav>
-          <button data-view="patients" class="nav-btn active">Patients</button>
+          <button data-view="dashboard" class="nav-btn active">Dashboard</button>
+          <button data-view="patients" class="nav-btn">Patients</button>
           <button data-view="billing" class="nav-btn">Billing</button>
           <button data-view="dispensary" class="nav-btn">Dispensary</button>
           <button data-view="settings" class="nav-btn">Settings</button>
@@ -58,8 +59,56 @@
     </header>
 
     <main>
+      <!-- DASHBOARD VIEW -->
+      <section id="view-dashboard" class="view active">
+        <h2>Dashboard</h2>
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-label">Patients Today</div>
+            <div class="stat-value" id="dash-patients-today">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Patients This Week</div>
+            <div class="stat-value" id="dash-patients-week">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Today's Money</div>
+            <div class="stat-value" id="dash-income-today">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Needs Attention</div>
+            <div class="stat-value" id="dash-needs-attention">0</div>
+          </div>
+        </div>
+
+        <h3>Top Illnesses This Week</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Complaint</th>
+              <th>Patients</th>
+            </tr>
+          </thead>
+          <tbody id="dash-illnesses-table-body"></tbody>
+        </table>
+        <p id="dash-illnesses-empty" class="empty-state" hidden>No complaints recorded this week yet.</p>
+
+        <h3>Needs Attention</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Medicine</th>
+              <th>Why</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="dash-attention-table-body"></tbody>
+        </table>
+        <p id="dash-attention-empty" class="empty-state" hidden>Nothing needs attention — stock and expiry dates all look good.</p>
+      </section>
+
       <!-- PATIENTS LIST VIEW -->
-      <section id="view-patients" class="view active">
+      <section id="view-patients" class="view">
         <div class="toolbar">
           <input id="patient-search" type="text" placeholder="Search by name or phone..." />
           <button id="btn-new-patient" class="primary">+ New Patient</button>
