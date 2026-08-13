@@ -74,14 +74,28 @@ together — so the program doesn't live only in one person's head.
 - **Needs Attention** — every low-stock or soon-to-expire medicine in one
   list, click one to jump straight to that drug.
 
+**Automatic Backup** (Section 6's safeguard, "a promise, not a feature")
+- CareLedger quietly saves a full copy of the database shortly after
+  opening, and then every hour, to a `backups` folder next to the real
+  data — no one has to remember to do it. The last 10 automatic backups
+  are kept; older ones are deleted automatically.
+- Backups use SQLite's own online backup mechanism (not a plain file copy),
+  so the copy is always consistent even while the app is being used.
+- **Settings → Backups** shows when the last backup happened, and has a
+  **Back Up to Flash Drive / Folder…** button for saving a copy anywhere
+  you choose — a USB stick, an external drive, a synced folder, etc.
+- Cloud backup (the plan's third copy, "when internet is available") isn't
+  built — it needs a cloud storage account/service to send backups to,
+  which nobody has set up yet. The flash-drive export covers the same need
+  by hand in the meantime.
+
 Everything is stored in a single SQLite file on the clinic's own computer.
 No internet connection is needed for any of this to work — that's the whole
 point of CareLedger, and it will stay true as more phases are added.
 
-All five phases from the original product plan are now built. What's left
-is what the plan calls the "optional extra layer": cloud backup and phone
-access — features that add convenience on top of an app that already works
-completely offline.
+All five build-order phases from the original product plan are now built,
+plus the automatic backup safeguard from Section 6. What's left is what the
+plan calls the "optional extra layer": cloud backup and phone access.
 
 ## How to run it
 
@@ -110,7 +124,11 @@ npm start         # opens the CareLedger window
   - `ipc.js` — connects the on-screen buttons/forms to `db.js`, gated by
     `session.js` — every action (like "add a patient") passes through here
     and is checked and stamped with who did it.
-  - `main.js` — opens the app window and starts everything up.
+  - `backup.js` — backup filenames and the "keep only the last 10" cleanup
+    logic. Plain functions, no Electron or database code, so they're easy
+    to test on their own.
+  - `main.js` — opens the app window, starts everything up, and schedules
+    the automatic backup (shortly after opening, then hourly).
 - **`src/preload/preload.js`** — a safety bridge. It only lets the screen
   call the specific actions listed here (add patient, list patients, etc.),
   nothing else. This keeps the app secure.
@@ -129,10 +147,9 @@ real patient data). Once the app is packaged and installed on a clinic's
 computer, the database automatically moves to that computer's private user
 data folder, so it survives app updates.
 
-**Backup is not automated yet** — that's an explicit safeguard from the
-product plan (Section 6) that still needs to be built. Until then, treat
-`careledger.db` as the one and only copy of a clinic's data and back it up
-by hand if you're testing with anything real.
+Automatic backups live in `data/backups/` (dev) or the packaged app's user
+data folder, alongside the real database — see the Automatic Backup section
+above. The last 10 are kept automatically.
 
 ## Testing
 
@@ -166,8 +183,8 @@ so this should rarely come up by hand.)
 
 ## Next step
 
-All five build-order phases from the product plan are done. Natural next
-steps: automatic backup (to a second location, a flash drive, and the
-cloud when internet is available — Section 6's biggest safeguard), and
-packaging the app so a clinic can install it without needing Node.js at
-all.
+All five build-order phases from the product plan are done, plus automatic
+backup. The natural next step is packaging the app so a clinic can install
+it without needing Node.js at all (an actual `.exe`/`.dmg`/`.AppImage` a
+non-technical person can double-click) — the last thing standing between
+this and a clinic actually using it.

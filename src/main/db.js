@@ -452,6 +452,14 @@ function createDb(dbPath) {
       stmts.setStaffActive.run({ id, active: active ? 1 : 0 });
     },
 
+    // Uses SQLite's own online backup API (via better-sqlite3) rather than
+    // copying the file directly — this produces a consistent snapshot even
+    // while the database is open and being written to, which a plain file
+    // copy of a WAL-mode database cannot safely guarantee.
+    backupTo(destPath) {
+      return conn.backup(destPath);
+    },
+
     close() {
       conn.close();
     },

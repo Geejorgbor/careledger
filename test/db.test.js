@@ -10,8 +10,9 @@ const Database = require('better-sqlite3');
 const { createDb } = require('../src/main/db');
 const { hashPassword, verifyPassword } = require('../src/main/auth');
 const { createSession } = require('../src/main/session');
+const { timestampedFilename, pruneOldBackups, runAutoBackup } = require('../src/main/backup');
 
-function run() {
+async function run() {
   const db = createDb(':memory:');
 
   // Registering a patient
@@ -357,7 +358,67 @@ function run() {
 
   db3.close();
 
+  // Backup: db.backupTo() should produce a real, independently-openable
+  // SQLite file with the same data — using SQLite's own online backup API,
+  // not a raw file copy, so it's safe even while the source db is in use.
+  const backupTestDbPath = path.join(os.tmpdir(), `careledger-backup-source-${Date.now()}.db`);
+  const sourceDb = createDb(backupTestDbPath);
+  sourceDb.addPatient({ firstName: 'Backup', lastName: 'Target' });
+
+  const snapshotPath = path.join(os.tmpdir(), `careledger-backup-snapshot-${Date.now()}.db`);
+  await sourceDb.backupTo(snapshotPath);
+  sourceDb.close();
+
+  const snapshotConn = new Database(snapshotPath, { readonly: true });
+  const snapshotPatients = snapshotConn.prepare('SELECT * FROM patients').all();
+  assert.strictEqual(snapshotPatients.length, 1);
+  assert.strictEqual(snapshotPatients[0].first_name, 'Backup');
+  snapshotConn.close();
+
+  for (const p of [backupTestDbPath, `${backupTestDbPath}-wal`, `${backupTestDbPath}-shm`, snapshotPath]) {
+    fs.rmSync(p, { force: true });
+  }
+
+  // timestampedFilename: sortable (chronological order == alphabetical
+  // order) and always matches the pattern pruneOldBackups looks for.
+  const nameA = timestampedFilename(new Date('2026-01-01T09:05:03'));
+  const nameB = timestampedFilename(new Date('2026-01-01T09:05:04'));
+  assert.ok(nameA < nameB, 'later timestamps should sort after earlier ones as plain strings');
+  assert.ok(/^careledger-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.db$/.test(nameA), `unexpected filename shape: ${nameA}`);
+
+  // pruneOldBackups: keeps only the newest N, deletes the rest
+  const pruneTestDir = fs.mkdtempSync(path.join(os.tmpdir(), 'careledger-prune-test-'));
+  const filenames = ['a', 'b', 'c', 'd', 'e'].map((_, i) => `careledger-backup-2026-01-0${i + 1}_00-00-00.db`);
+  for (const name of filenames) fs.writeFileSync(path.join(pruneTestDir, name), 'x');
+  fs.writeFileSync(path.join(pruneTestDir, 'not-a-backup-file.txt'), 'x'); // should be left alone
+
+  const removedCount = pruneOldBackups(pruneTestDir, 3);
+  assert.strictEqual(removedCount, 2);
+  const remaining = fs.readdirSync(pruneTestDir).sort();
+  assert.deepStrictEqual(remaining, ['careledger-backup-2026-01-03_00-00-00.db', 'careledger-backup-2026-01-04_00-00-00.db', 'careledger-backup-2026-01-05_00-00-00.db', 'not-a-backup-file.txt'], 'should keep the 3 newest backups and the unrelated file');
+  fs.rmSync(pruneTestDir, { recursive: true, force: true });
+
+  // runAutoBackup: end-to-end — creates the backups dir, writes a real
+  // snapshot, and prunes down to the configured maximum.
+  const autoBackupSourcePath = path.join(os.tmpdir(), `careledger-autobackup-source-${Date.now()}.db`);
+  const autoBackupDb = createDb(autoBackupSourcePath);
+  autoBackupDb.addPatient({ firstName: 'Auto', lastName: 'Backup' });
+  const autoBackupsDir = path.join(os.tmpdir(), `careledger-autobackup-dir-${Date.now()}`);
+
+  const firstBackupPath = await runAutoBackup(autoBackupDb, autoBackupsDir);
+  assert.ok(fs.existsSync(firstBackupPath), 'runAutoBackup should create the backup file');
+  assert.strictEqual(fs.readdirSync(autoBackupsDir).length, 1);
+
+  autoBackupDb.close();
+  fs.rmSync(autoBackupSourcePath, { force: true });
+  fs.rmSync(`${autoBackupSourcePath}-wal`, { force: true });
+  fs.rmSync(`${autoBackupSourcePath}-shm`, { force: true });
+  fs.rmSync(autoBackupsDir, { recursive: true, force: true });
+
   console.log('All db.js tests passed.');
 }
 
-run();
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

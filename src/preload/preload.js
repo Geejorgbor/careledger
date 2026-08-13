@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('careledger', {
   getMovementsForDrug: (drugId) => unwrap(ipcRenderer.invoke('drugs:movements', drugId)),
   listLowStockDrugs: () => unwrap(ipcRenderer.invoke('drugs:lowStock')),
   listExpiringSoonDrugs: () => unwrap(ipcRenderer.invoke('drugs:expiringSoon')),
+  getBackupStatus: () => unwrap(ipcRenderer.invoke('backup:status')),
+  runBackupNow: () => unwrap(ipcRenderer.invoke('backup:runNow')),
+  exportBackup: () => unwrap(ipcRenderer.invoke('backup:exportTo')),
   getSetting: (key) => unwrap(ipcRenderer.invoke('settings:get', key)),
   setSetting: (key, value) => unwrap(ipcRenderer.invoke('settings:set', key, value)),
 });

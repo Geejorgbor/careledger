@@ -28,6 +28,10 @@ const els = {
   modalNewStaff: document.getElementById('modal-new-staff'),
   formNewStaff: document.getElementById('form-new-staff'),
 
+  backupStatus: document.getElementById('backup-status'),
+  btnBackupNow: document.getElementById('btn-backup-now'),
+  btnBackupExport: document.getElementById('btn-backup-export'),
+
   clinicName: document.getElementById('clinic-name'),
   navBtns: document.querySelectorAll('.nav-btn'),
   views: document.querySelectorAll('.view'),
@@ -512,6 +516,50 @@ els.formNewStaff.addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- Backups ----------
+
+async function loadBackupStatus() {
+  const status = await window.careledger.getBackupStatus();
+  const parts = [];
+  parts.push(status.lastBackupAt
+    ? `Last automatic backup: ${new Date(status.lastBackupAt).toLocaleString()}`
+    : 'No automatic backup yet — the first one happens shortly after opening the app.');
+  if (status.lastManualBackupAt) {
+    parts.push(`Last backup to a folder: ${new Date(status.lastManualBackupAt).toLocaleString()}`);
+  }
+  if (status.lastBackupError) {
+    parts.push(`Last automatic backup attempt failed: ${status.lastBackupError}`);
+  }
+  els.backupStatus.textContent = parts.join(' · ');
+}
+
+els.btnBackupNow.addEventListener('click', async () => {
+  els.btnBackupNow.disabled = true;
+  try {
+    await window.careledger.runBackupNow();
+    await loadBackupStatus();
+  } catch (err) {
+    alert(`Backup failed: ${err.message}`);
+  } finally {
+    els.btnBackupNow.disabled = false;
+  }
+});
+
+els.btnBackupExport.addEventListener('click', async () => {
+  els.btnBackupExport.disabled = true;
+  try {
+    const result = await window.careledger.exportBackup();
+    if (!result.canceled) {
+      await loadBackupStatus();
+      alert(`Backup saved to:\n${result.filePath}`);
+    }
+  } catch (err) {
+    alert(`Backup failed: ${err.message}`);
+  } finally {
+    els.btnBackupExport.disabled = false;
+  }
+});
+
 // ---------- Nav + modal close buttons ----------
 
 els.navBtns.forEach((btn) => {
@@ -521,7 +569,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'patients') loadPatients();
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();
-    if (btn.dataset.view === 'settings') loadStaff();
+    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); }
   });
 });
 

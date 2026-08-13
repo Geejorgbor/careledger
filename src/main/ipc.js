@@ -1,4 +1,5 @@
-const { ipcMain } = require('electron');
+const { ipcMain, dialog, BrowserWindow } = require('electron');
+const { runAutoBackup } = require('./backup');
 
 /**
  * Wires renderer IPC channels to the database layer. Every handler is
@@ -10,11 +11,11 @@ const { ipcMain } = require('electron');
  * a tampered window can never bypass this). Actions that create a record
  * are stamped with who did it.
  */
-function registerIpcHandlers(db, session) {
+function registerIpcHandlers(db, session, getBackupsDir) {
   function handle(channel, fn) {
-    ipcMain.handle(channel, (_event, ...args) => {
+    ipcMain.handle(channel, async (_event, ...args) => {
       try {
-        return { ok: true, data: fn(...args) };
+        return { ok: true, data: await fn(...args) };
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -119,6 +120,36 @@ function registerIpcHandlers(db, session) {
   handle('drugs:expiringSoon', () => {
     session.requireLogin();
     return db.listExpiringSoonDrugs();
+  });
+
+  // ---------- Backups ----------
+  handle('backup:status', () => {
+    session.requireLogin();
+    return {
+      lastBackupAt: db.getSetting('lastBackupAt'),
+      lastBackupError: db.getSetting('lastBackupError'),
+      lastManualBackupAt: db.getSetting('lastManualBackupAt'),
+    };
+  });
+  handle('backup:runNow', async () => {
+    session.requireLogin();
+    const dest = await runAutoBackup(db, getBackupsDir());
+    db.setSetting('lastBackupAt', new Date().toISOString());
+    db.setSetting('lastBackupError', '');
+    return { path: dest };
+  });
+  handle('backup:exportTo', async () => {
+    session.requireLogin();
+    const win = BrowserWindow.getAllWindows()[0];
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: 'Back Up CareLedger Data',
+      defaultPath: `careledger-backup-${new Date().toISOString().slice(0, 10)}.db`,
+      filters: [{ name: 'CareLedger Backup', extensions: ['db'] }],
+    });
+    if (canceled || !filePath) return { canceled: true };
+    await db.backupTo(filePath);
+    db.setSetting('lastManualBackupAt', new Date().toISOString());
+    return { canceled: false, filePath };
   });
 
   // ---------- Settings ----------
