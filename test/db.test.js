@@ -13,6 +13,16 @@ const { createSession } = require('../src/main/session');
 const { timestampedFilename, pruneOldBackups, runAutoBackup } = require('../src/main/backup');
 const { canManageStaffAndSettings, canUseDispensary } = require('../src/main/permissions');
 
+// The app's SQL uses date('now', 'localtime') for "today" — toISOString()
+// is UTC, which drifts a day off from local "today" for part of every day
+// depending on timezone (bit us for real once: system was 11:44pm local
+// but already the next UTC day). Always build test dates from local
+// getters so they agree with what the app itself considers "today".
+function localDateString(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 async function run() {
   const db = createDb(':memory:');
 
@@ -61,7 +71,7 @@ async function run() {
   assert.strictEqual(visits[0].payment_amount, 15.5);
 
   // Billing: charge vs payment, balance, and income summary
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
 
   // Default case: no chargeAmount given -> assumed paid in full
   const paidInFullVisit = db.addVisit({
@@ -145,8 +155,8 @@ async function run() {
   assert.strictEqual(db2.getSetting('clinicName'), 'Renamed Clinic', 'setSetting should overwrite, not duplicate');
 
   // Drug Dispensary: stock + expiry tracking
-  const soonDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10); // 5 days from now
-  const farDate = new Date(Date.now() + 200 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10); // ~6+ months out
+  const soonDate = localDateString(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)); // 5 days from now
+  const farDate = localDateString(new Date(Date.now() + 200 * 24 * 60 * 60 * 1000)); // ~6+ months out
 
   const paracetamol = db2.addDrug({
     name: 'Paracetamol',
@@ -334,7 +344,7 @@ async function run() {
   db3.addVisit({ patientId: bob.id, visitDate: today, complaint: 'Cough', paymentAmount: 10 });
   // A week-old-but-not-today visit still counts for "this week" and for
   // top illnesses, just not for "today".
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const threeDaysAgo = localDateString(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000));
   db3.addVisit({ patientId: carol.id, visitDate: threeDaysAgo, complaint: 'Fever', paymentAmount: 8 });
 
   db3.addDrug({ name: 'Low Stock Drug', quantityOnHand: 2, reorderLevel: 10 });
@@ -484,8 +494,8 @@ async function run() {
   // Appointment scheduling
   const db6 = createDb(':memory:');
   const apptPatient = db6.addPatient({ firstName: 'Appt', lastName: 'Patient' });
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const tomorrow = localDateString(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const yesterday = localDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
   const appt = db6.addAppointment({
     patientId: apptPatient.id,

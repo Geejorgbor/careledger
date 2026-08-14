@@ -43,4 +43,5 @@ contextBridge.exposeInMainWorld('careledger', {
   checkForUpdates: () => unwrap(ipcRenderer.invoke('app:checkForUpdates')),
   getSetting: (key) => unwrap(ipcRenderer.invoke('settings:get', key)),
   setSetting: (key, value) => unwrap(ipcRenderer.invoke('settings:set', key, value)),
+  pickClinicLogo: () => unwrap(ipcRenderer.invoke('settings:pickLogo')),
 });

@@ -151,10 +151,18 @@ you're logged in with the GitHub CLI). That builds the installer *and*
 publishes it as a GitHub Release in one step, which is exactly what
 already-installed copies of CareLedger check against.
 
+**Clinic Logo** — completes white-labeling (Section 7): **Settings →
+Clinic Logo → Upload Logo…** picks a PNG/JPG/GIF from the computer, and it
+immediately shows up at the top of the app next to the clinic name, and on
+every printed receipt. The logo is stored right inside the database
+itself (not a separate file), so it's automatically included in every
+backup and travels with the app if it's ever reinstalled.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
-receipts, role-based permissions, vital signs, appointment scheduling, and
-automatic app updates.
+receipts, role-based permissions, vital signs, appointment scheduling,
+automatic app updates, and the clinic logo — white-labeling (Section 7) is
+now fully done.
 What's left is what the plan calls the "optional extra layer": cloud
 backup and phone access.
 
@@ -273,6 +281,20 @@ npx electron-rebuild -f -w better-sqlite3
 (`npm install` already does this automatically via the `postinstall` script,
 so this should rarely come up by hand.)
 
+## Another gotcha (local dates vs. UTC dates)
+
+The database's "today"/"this week" logic (Dashboard, Billing, low-stock
+alerts) uses SQLite's `date('now', 'localtime')` — the clinic's own local
+calendar day. JavaScript's `new Date().toISOString()` gives the UTC date
+instead, which is a *different* calendar day for part of every single day
+in any timezone that isn't exactly UTC+0. Always build a "today" date in
+code with local getters (`date.getFullYear()`, `getMonth()`, `getDate()`),
+never `toISOString().slice(0, 10)` — see `todayLocalDateString()` in
+`app.js` and `localDateString()` in `test/db.test.js`. This bit us for
+real once (a passing test started failing purely because the sandbox's
+clock crossed local midnight while UTC hadn't yet), which is how it got
+caught and fixed everywhere it appeared.
+
 ## Next step
 
 Everything from the original product plan's build order is done, plus
@@ -294,6 +316,5 @@ point with clinics (this was inspired by looking at what an unrelated
 company selling under the same name offers — see the naming conversation
 from earlier).
 
-Also still open, lower priority: a real clinic logo/name shown everywhere
-(white-labeling, Section 7, has its data foundation already — `clinicName`
-in settings — but no logo upload yet), cloud backup, and phone access.
+Also still open, lower priority: cloud backup and phone access — the
+plan's "optional extra layer".

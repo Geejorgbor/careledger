@@ -42,7 +42,10 @@
 
   <div id="app" hidden>
     <header id="app-header">
-      <h1 id="clinic-name">CareLedger</h1>
+      <div class="header-brand">
+        <img id="header-logo" alt="Clinic logo" hidden />
+        <h1 id="clinic-name">CareLedger</h1>
+      </div>
       <div class="header-right">
         <nav>
           <button data-view="dashboard" class="nav-btn active">Dashboard</button>
@@ -297,6 +300,18 @@
         </form>
         <p id="settings-saved" class="empty-state" hidden>Saved.</p>
 
+        <h3>Clinic Logo</h3>
+        <p class="auth-sub">Shown at the top of the app and on printed receipts, so it feels made just for your clinic.</p>
+        <img id="settings-logo-preview" alt="Clinic logo" hidden />
+        <p id="settings-logo-empty" class="empty-state" hidden>No logo uploaded yet.</p>
+        <div class="toolbar">
+          <div></div>
+          <div>
+            <button id="btn-remove-logo" class="secondary" hidden>Remove Logo</button>
+            <button id="btn-upload-logo" class="primary">Upload Logo&hellip;</button>
+          </div>
+        </div>
+
         <h2>Staff Accounts</h2>
         <div class="toolbar">
           <div></div>
@@ -476,6 +491,7 @@
 
   <!-- PRINT-ONLY RECEIPT (invisible on screen, shown only by @media print) -->
   <div id="receipt-print-area">
+    <img id="receipt-logo" alt="Clinic logo" hidden />
     <h1 id="receipt-clinic-name"></h1>
     <div id="receipt-title">Payment Receipt</div>
     <table id="receipt-fields"></table>

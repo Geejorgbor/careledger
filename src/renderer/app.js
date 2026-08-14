@@ -59,6 +59,11 @@ const els = {
   updateStatus: document.getElementById('update-status'),
 
   clinicName: document.getElementById('clinic-name'),
+  headerLogo: document.getElementById('header-logo'),
+  settingsLogoPreview: document.getElementById('settings-logo-preview'),
+  settingsLogoEmpty: document.getElementById('settings-logo-empty'),
+  btnUploadLogo: document.getElementById('btn-upload-logo'),
+  btnRemoveLogo: document.getElementById('btn-remove-logo'),
   navBtns: document.querySelectorAll('.nav-btn'),
   views: document.querySelectorAll('.view'),
 
@@ -118,6 +123,16 @@ function switchView(name) {
 function formatDate(isoDate) {
   if (!isoDate) return '';
   return isoDate;
+}
+
+// The database's "today"/"this week" logic runs in local time (SQLite's
+// date('now', 'localtime')), so date fields we pre-fill must agree — using
+// toISOString() (always UTC) can show the wrong day for part of every day,
+// depending on the clinic's timezone.
+function todayLocalDateString() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function formatMoney(amount) {
@@ -355,6 +370,14 @@ function printReceipt(visit) {
     .map(([label, value]) => `<tr><td>${label}</td><td>${value}</td></tr>`)
     .join('');
 
+  const receiptLogo = document.getElementById('receipt-logo');
+  receiptLogo.hidden = !currentLogoDataUri;
+  if (currentLogoDataUri) {
+    receiptLogo.src = currentLogoDataUri;
+  } else {
+    receiptLogo.removeAttribute('src');
+  }
+
   window.print();
 }
 
@@ -367,7 +390,7 @@ els.btnBackToPatients.addEventListener('click', () => {
 
 els.btnNewVisit.addEventListener('click', () => {
   const dateInput = els.formNewVisit.elements['visitDate'];
-  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  if (!dateInput.value) dateInput.value = todayLocalDateString();
   paidAmountManuallyEdited = false;
   els.modalNewVisit.showModal();
 });
@@ -461,7 +484,7 @@ async function loadPatientAppointments() {
 
 els.btnNewAppointment.addEventListener('click', () => {
   const dateInput = els.formNewAppointment.elements['appointmentDate'];
-  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  if (!dateInput.value) dateInput.value = todayLocalDateString();
   els.modalNewAppointment.showModal();
 });
 
@@ -623,13 +646,51 @@ els.formDispenseDrug.addEventListener('submit', async (e) => {
 
 // ---------- Settings (white-label foundation) ----------
 
+let currentLogoDataUri = '';
+
+function applyLogo(dataUri) {
+  currentLogoDataUri = dataUri || '';
+  const hasLogo = Boolean(currentLogoDataUri);
+
+  els.headerLogo.hidden = !hasLogo;
+  els.settingsLogoPreview.hidden = !hasLogo;
+  els.settingsLogoEmpty.hidden = hasLogo;
+  els.btnRemoveLogo.hidden = !hasLogo;
+
+  if (hasLogo) {
+    els.headerLogo.src = currentLogoDataUri;
+    els.settingsLogoPreview.src = currentLogoDataUri;
+  } else {
+    els.headerLogo.removeAttribute('src');
+    els.settingsLogoPreview.removeAttribute('src');
+  }
+}
+
 async function loadSettings() {
   const clinicName = await window.careledger.getSetting('clinicName');
   if (clinicName) {
     els.clinicName.textContent = clinicName;
     els.settingsClinicName.value = clinicName;
   }
+  applyLogo(await window.careledger.getSetting('clinicLogo'));
 }
+
+els.btnUploadLogo.addEventListener('click', async () => {
+  els.btnUploadLogo.disabled = true;
+  try {
+    const result = await window.careledger.pickClinicLogo();
+    if (!result.canceled) applyLogo(result.dataUri);
+  } catch (err) {
+    alert(`Could not upload logo: ${err.message}`);
+  } finally {
+    els.btnUploadLogo.disabled = false;
+  }
+});
+
+els.btnRemoveLogo.addEventListener('click', async () => {
+  await window.careledger.setSetting('clinicLogo', '');
+  applyLogo('');
+});
 
 els.settingsForm.addEventListener('submit', async (e) => {
   e.preventDefault();

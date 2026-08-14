@@ -1,6 +1,11 @@
 const { ipcMain, dialog, BrowserWindow, app } = require('electron');
+const fs = require('fs');
+const path = require('path');
 const { runAutoBackup } = require('./backup');
 const { autoUpdater } = require('./updater');
+
+const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3MB — a clinic logo should never need to be bigger
+const LOGO_MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif' };
 
 /**
  * Wires renderer IPC channels to the database layer. Every handler is
@@ -187,6 +192,32 @@ function registerIpcHandlers(db, session, getBackupsDir) {
   handle('settings:set', (key, value) => {
     session.requireAdmin();
     db.setSetting(key, value);
+  });
+  // The logo is stored as a data URI right inside the settings table (not
+  // a separate file) — so it's automatically included in every backup and
+  // survives moving/reinstalling the app, same as everything else.
+  handle('settings:pickLogo', async () => {
+    session.requireAdmin();
+    const win = BrowserWindow.getAllWindows()[0];
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: 'Choose Clinic Logo',
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || !filePaths.length) return { canceled: true };
+
+    const filePath = filePaths[0];
+    const stats = fs.statSync(filePath);
+    if (stats.size > MAX_LOGO_BYTES) {
+      throw new Error('That image is too large — please choose one under 3MB.');
+    }
+    const mimeType = LOGO_MIME_TYPES[path.extname(filePath).toLowerCase()];
+    if (!mimeType) {
+      throw new Error('Please choose a PNG, JPG, or GIF image.');
+    }
+    const dataUri = `data:${mimeType};base64,${fs.readFileSync(filePath).toString('base64')}`;
+    db.setSetting('clinicLogo', dataUri);
+    return { canceled: false, dataUri };
   });
 }
 
