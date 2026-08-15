@@ -6,6 +6,9 @@
   --color-border: #dde3e0;
   --color-text: #1f2a26;
   --color-text-muted: #667670;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 21, 0.06), 0 1px 1px rgba(16, 24, 21, 0.04);
+  --shadow-md: 0 6px 16px rgba(16, 24, 21, 0.10), 0 2px 4px rgba(16, 24, 21, 0.05);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 21, 0.18), 0 4px 10px rgba(16, 24, 21, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -17,6 +20,22 @@ body {
   color: var(--color-text);
 }
 
+button, input, select, textarea { font-family: inherit; }
+
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(28, 122, 94, 0.15);
+}
+
+.view.active { animation: fadeIn 0.18s ease; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 #app-header {
   display: flex;
   align-items: center;
@@ -24,6 +43,9 @@ body {
   padding: 16px 24px;
   background: var(--color-primary);
   color: white;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  z-index: 5;
 }
 
 #app-header h1 { margin: 0; font-size: 20px; }
@@ -63,6 +85,7 @@ body {
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
+  transition: background-color 0.15s ease;
 }
 .link-btn-white:hover { background: rgba(255,255,255,0.15); }
 
@@ -75,6 +98,7 @@ body {
   cursor: pointer;
   font-size: 14px;
   border-radius: 6px;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 .nav-btn.active, .nav-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); }
 
@@ -111,8 +135,11 @@ button.primary {
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+  box-shadow: 0 1px 2px rgba(20, 92, 70, 0.25);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
 }
-button.primary:hover { background: var(--color-primary-dark); }
+button.primary:hover { background: var(--color-primary-dark); box-shadow: var(--shadow-sm); }
+button.primary:active { transform: translateY(1px); }
 
 button.secondary {
   background: white;
@@ -123,8 +150,10 @@ button.secondary {
   cursor: pointer;
   font-size: 14px;
   margin-right: 8px;
+  transition: background-color 0.15s ease, transform 0.08s ease;
 }
 button.secondary:hover { background: #f0f5f2; }
+button.secondary:active { transform: translateY(1px); }
 
 .link-btn {
   background: none;
@@ -142,6 +171,7 @@ button.secondary:hover { background: #f0f5f2; }
   background: var(--color-surface);
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .data-table th, .data-table td {
@@ -152,8 +182,30 @@ button.secondary:hover { background: #f0f5f2; }
 }
 
 .data-table th { color: var(--color-text-muted); font-weight: 600; background: #fafbfa; }
-.data-table tbody tr { cursor: pointer; }
+.data-table tbody tr { cursor: pointer; transition: background-color 0.1s ease; }
 .data-table tbody tr:hover { background: #f0f5f2; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+
+.loading-row td {
+  text-align: center;
+  padding: 28px;
+  color: var(--color-text-muted);
+  cursor: default;
+}
+.loading-row:hover { background: transparent !important; }
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .empty-state { color: var(--color-text-muted); text-align: center; padding: 24px; }
 
@@ -169,7 +221,10 @@ button.secondary:hover { background: #f0f5f2; }
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
+.stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 
 .stat-label {
   font-size: 13px;
@@ -183,11 +238,26 @@ button.secondary:hover { background: #f0f5f2; }
   color: var(--color-primary-dark);
 }
 
-.balance-owed { color: #b3261e; font-weight: 600; }
+.balance-owed, .stock-low {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fdecea;
+  color: #b3261e;
+}
 .balance-paid { color: var(--color-text-muted); }
 
-.stock-low { color: #b3261e; font-weight: 600; }
-.stock-expiring { color: #a15c00; font-weight: 600; }
+.stock-expiring {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff4e0;
+  color: #a15c00;
+}
 
 .patient-header { margin-bottom: 20px; }
 .patient-header h2 { margin: 0 0 4px 0; }
@@ -199,8 +269,9 @@ dialog {
   padding: 0;
   width: 420px;
   max-width: 90vw;
+  box-shadow: var(--shadow-lg);
 }
-dialog::backdrop { background: rgba(0,0,0,0.35); }
+dialog::backdrop { background: rgba(16, 24, 21, 0.45); backdrop-filter: blur(1px); }
 
 dialog form {
   padding: 24px;
@@ -225,7 +296,9 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   padding: 9px 16px;
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
+.cancel-btn:hover { background: #f6f8f7; }
 
 #settings-form {
   display: flex;
@@ -251,6 +324,7 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 32px;
+  box-shadow: var(--shadow-lg);
 }
 
 .auth-box h1 { margin: 0 0 20px 0; color: var(--color-primary-dark); text-align: center; }
@@ -267,8 +341,15 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
 
 .auth-error { color: #b3261e; font-size: 13px; margin: 4px 0 0 0; }
 
-.status-active { color: var(--color-primary-dark); font-weight: 600; }
-.status-inactive { color: var(--color-text-muted); }
+.status-active, .status-inactive {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-active { background: #e3f3ec; color: var(--color-primary-dark); }
+.status-inactive { background: #eef0ef; color: var(--color-text-muted); }
 
 .btn-print {
   background: none;
@@ -278,6 +359,7 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
+  transition: background-color 0.15s ease;
 }
 .btn-print:hover { background: #f0f5f2; }
 

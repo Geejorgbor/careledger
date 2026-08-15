@@ -120,6 +120,12 @@ function switchView(name) {
   els.navBtns.forEach((b) => b.classList.toggle('active', b.dataset.view === name));
 }
 
+// Shown briefly in a table while its data is being fetched, so switching
+// tabs never looks like a blank flash before content appears.
+function showLoadingRow(tbody, colspan) {
+  tbody.innerHTML = `<tr class="loading-row"><td colspan="${colspan}"><span class="spinner"></span>Loading&hellip;</td></tr>`;
+}
+
 function formatDate(isoDate) {
   if (!isoDate) return '';
   return isoDate;
@@ -215,6 +221,8 @@ function applyPermissionsToUI(role) {
 // ---------- Dashboard ----------
 
 async function loadDashboard() {
+  showLoadingRow(els.dashIllnessesTableBody, 2);
+  showLoadingRow(els.dashAttentionTableBody, 3);
   const summary = await window.careledger.getDashboardSummary();
   els.dashPatientsToday.textContent = summary.patientsToday;
   els.dashPatientsWeek.textContent = summary.patientsThisWeek;
@@ -260,6 +268,7 @@ async function loadDashboard() {
 // ---------- Patients list ----------
 
 async function loadPatients() {
+  showLoadingRow(els.patientsTableBody, 4);
   const patients = await window.careledger.listPatients(els.patientSearch.value);
   els.patientsTableBody.innerHTML = '';
   els.patientsEmpty.hidden = patients.length > 0;
@@ -321,6 +330,7 @@ function formatVitals(v) {
 }
 
 async function loadVisits() {
+  showLoadingRow(els.visitsTableBody, 10);
   const visits = await window.careledger.listVisitsForPatient(currentPatientId);
   els.visitsTableBody.innerHTML = '';
   els.visitsEmpty.hidden = visits.length > 0;
@@ -444,6 +454,7 @@ function statusSelect(appointment, onChange) {
 }
 
 async function loadAppointments() {
+  showLoadingRow(els.appointmentsTableBody, 6);
   const appointments = await window.careledger.listUpcomingAppointments();
   els.appointmentsTableBody.innerHTML = '';
   els.appointmentsEmpty.hidden = appointments.length > 0;
@@ -466,6 +477,7 @@ async function loadAppointments() {
 }
 
 async function loadPatientAppointments() {
+  showLoadingRow(els.patientAppointmentsTableBody, 4);
   const appointments = await window.careledger.listAppointmentsForPatient(currentPatientId);
   els.patientAppointmentsTableBody.innerHTML = '';
   els.patientAppointmentsEmpty.hidden = appointments.length > 0;
@@ -510,6 +522,7 @@ async function loadBilling() {
   els.incomeWeek.textContent = formatMoney(income.thisWeek);
   els.incomeMonth.textContent = formatMoney(income.thisMonth);
 
+  showLoadingRow(els.outstandingTableBody, 5);
   const outstanding = await window.careledger.listOutstandingBalances();
   els.outstandingTableBody.innerHTML = '';
   els.outstandingEmpty.hidden = outstanding.length > 0;
@@ -541,6 +554,7 @@ function isExpiringSoon(drug) {
 }
 
 async function loadDrugs() {
+  showLoadingRow(els.drugsTableBody, 5);
   const drugs = await window.careledger.listDrugs(els.drugSearch.value);
   els.drugsTableBody.innerHTML = '';
   els.drugsEmpty.hidden = drugs.length > 0;
@@ -591,6 +605,7 @@ async function openDrugDetail(drugId) {
 }
 
 async function loadDrugMovements() {
+  showLoadingRow(els.drugMovementsTableBody, 5);
   const movements = await window.careledger.getMovementsForDrug(currentDrugId);
   els.drugMovementsTableBody.innerHTML = '';
   els.drugMovementsEmpty.hidden = movements.length > 0;
@@ -704,6 +719,7 @@ els.settingsForm.addEventListener('submit', async (e) => {
 // ---------- Staff management ----------
 
 async function loadStaff() {
+  showLoadingRow(els.staffTableBody, 5);
   const staff = await window.careledger.listStaff();
   els.staffTableBody.innerHTML = '';
   for (const s of staff) {

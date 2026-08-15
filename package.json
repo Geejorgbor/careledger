@@ -25,6 +25,7 @@
   "build": {
     "appId": "com.payeconnect.careledger",
     "productName": "CareLedger",
+    "icon": "build/icon.png",
     "publish": {
       "provider": "github",
       "owner": "Geejorgbor",

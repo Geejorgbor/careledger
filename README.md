@@ -158,11 +158,25 @@ every printed receipt. The logo is stored right inside the database
 itself (not a separate file), so it's automatically included in every
 backup and travels with the app if it's ever reinstalled.
 
+**App Icon & Visual Polish** — so it feels like a finished, real program
+instead of something still being built:
+- A proper CareLedger icon (`build/icon.png`, a white medical cross on the
+  brand green) instead of Electron's generic default icon, in the taskbar
+  and title bar.
+- Subtle shadows on cards, tables, and dialogs for depth; smooth hover and
+  press transitions on every button; a branded green focus ring on inputs
+  instead of the plain default one.
+- Status/balance/stock indicators (Active, Balance Owed, Low Stock, etc.)
+  are now rounded colored badges instead of plain colored text — the kind
+  of small touch real apps have and unfinished ones usually don't.
+- A brief loading spinner in tables while data is being fetched, instead
+  of a blank flash before content appears.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
 receipts, role-based permissions, vital signs, appointment scheduling,
-automatic app updates, and the clinic logo — white-labeling (Section 7) is
-now fully done.
+automatic app updates, the clinic logo (white-labeling / Section 7 is now
+fully done), and this visual polish pass.
 What's left is what the plan calls the "optional extra layer": cloud
 backup and phone access.
 
