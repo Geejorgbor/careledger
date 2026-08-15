@@ -300,13 +300,23 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
 }
 .cancel-btn:hover { background: #f6f8f7; }
 
-#settings-form {
+#settings-form, #license-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-width: 360px;
 }
-#settings-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+#settings-form label, #license-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+
+#license-banner {
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+#license-banner[hidden] { display: none; }
+#license-banner.banner-warning { background: #fff4e0; color: #a15c00; }
+#license-banner.banner-expired { background: #fdecea; color: #b3261e; }
 
 #auth-screen {
   min-height: 100vh;

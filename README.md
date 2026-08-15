@@ -179,11 +179,23 @@ for handing records to an accountant or reporting to a health authority.
 Unlike the on-screen lists (capped at 200 rows for a snappy screen), these
 exports always include everything, with no limit.
 
+**Subscription expiry banner** — **Settings → Subscription** lets an Admin
+set a "Licensed Until" date for the clinic. If that date is within 7 days
+(or has already passed), a banner appears across the top of every screen
+("Your subscription expires in 3 days — please contact PayeConnect to
+renew" / "...expired on 2026-08-01 (5 days ago)..."). This is a **warning
+only** — nothing is locked or blocked, the clinic can keep using the app
+freely either way. It relies on PayeConnect following up directly with
+each clinic; it is not a real anti-piracy measure (the app's source and
+releases are on a public GitHub repo, so a technical user could always
+bypass or ignore the banner). If no date is set, the banner never shows.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
 receipts, role-based permissions, vital signs, appointment scheduling,
 automatic app updates, the clinic logo (white-labeling / Section 7 is now
-fully done), the visual polish pass, and CSV export.
+fully done), the visual polish pass, CSV export, and the subscription
+expiry banner.
 What's left is what the plan calls the "optional extra layer": cloud
 backup and phone access — plus two flagged-but-not-built security/UX
 items: auto-logout after inactivity, and encrypting the database file at
@@ -327,7 +339,8 @@ caught and fixed everywhere it appeared.
 
 Everything from the original product plan's build order is done, plus
 automatic backup, packaging, printable receipts, role-based permissions,
-vital signs, and appointment scheduling. CareLedger is at the point
+vital signs, appointment scheduling, and a subscription expiry warning
+banner. CareLedger is at the point
 described in Section 9: build one small showable piece, demo it — except
 now the whole thing is showable. The natural next step is real-world
 testing: show it to 2-3 real clinics (Section 9), get their reaction, and

@@ -62,6 +62,8 @@
       </div>
     </header>
 
+    <div id="license-banner" hidden></div>
+
     <main>
       <!-- DASHBOARD VIEW -->
       <section id="view-dashboard" class="view active">
@@ -299,6 +301,16 @@
           <button type="submit" class="primary">Save</button>
         </form>
         <p id="settings-saved" class="empty-state" hidden>Saved.</p>
+
+        <h2>Subscription</h2>
+        <form id="license-form">
+          <label>
+            Licensed Until
+            <input id="settings-license-date" type="date" />
+          </label>
+          <button type="submit" class="primary">Save</button>
+        </form>
+        <p id="license-saved" class="empty-state" hidden>Saved.</p>
 
         <h3>Clinic Logo</h3>
         <p class="auth-sub">Shown at the top of the app and on printed receipts, so it feels made just for your clinic.</p>

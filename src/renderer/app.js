@@ -87,6 +87,11 @@ const els = {
   settingsClinicName: document.getElementById('settings-clinic-name'),
   settingsSaved: document.getElementById('settings-saved'),
 
+  licenseForm: document.getElementById('license-form'),
+  settingsLicenseDate: document.getElementById('settings-license-date'),
+  licenseSaved: document.getElementById('license-saved'),
+  licenseBanner: document.getElementById('license-banner'),
+
   modalNewPatient: document.getElementById('modal-new-patient'),
   formNewPatient: document.getElementById('form-new-patient'),
   modalNewVisit: document.getElementById('modal-new-visit'),
@@ -692,7 +697,48 @@ async function loadSettings() {
     els.settingsClinicName.value = clinicName;
   }
   applyLogo(await window.careledger.getSetting('clinicLogo'));
+
+  const licenseExpiresAt = await window.careledger.getSetting('licenseExpiresAt');
+  if (licenseExpiresAt) els.settingsLicenseDate.value = licenseExpiresAt;
+  updateLicenseBanner(licenseExpiresAt);
 }
+
+function daysUntil(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  const now = new Date();
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target - todayLocal) / (24 * 60 * 60 * 1000));
+}
+
+function updateLicenseBanner(expiresAtStr) {
+  if (!expiresAtStr) {
+    els.licenseBanner.hidden = true;
+    return;
+  }
+  const days = daysUntil(expiresAtStr);
+  if (days < 0) {
+    const daysAgo = Math.abs(days);
+    els.licenseBanner.textContent = `Your subscription expired on ${expiresAtStr} (${daysAgo} day${daysAgo === 1 ? '' : 's'} ago) — please contact PayeConnect to renew.`;
+    els.licenseBanner.className = 'banner-expired';
+    els.licenseBanner.hidden = false;
+  } else if (days <= 7) {
+    els.licenseBanner.textContent = `Your subscription expires in ${days} day${days === 1 ? '' : 's'} (${expiresAtStr}) — please contact PayeConnect to renew.`;
+    els.licenseBanner.className = 'banner-warning';
+    els.licenseBanner.hidden = false;
+  } else {
+    els.licenseBanner.hidden = true;
+  }
+}
+
+els.licenseForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const value = els.settingsLicenseDate.value;
+  await window.careledger.setSetting('licenseExpiresAt', value);
+  updateLicenseBanner(value);
+  els.licenseSaved.hidden = false;
+  setTimeout(() => { els.licenseSaved.hidden = true; }, 1500);
+});
 
 els.btnUploadLogo.addEventListener('click', async () => {
   els.btnUploadLogo.disabled = true;
