@@ -156,6 +156,11 @@ function createDb(dbPath) {
     listPatients: conn.prepare(`
       SELECT * FROM patients ORDER BY last_name, first_name LIMIT 200
     `),
+    // Deliberately no LIMIT — these back CSV export, where "give me
+    // everything" is the whole point, unlike the on-screen lists above.
+    listAllPatients: conn.prepare(`
+      SELECT * FROM patients ORDER BY last_name, first_name
+    `),
     insertVisit: conn.prepare(`
       INSERT INTO visits (patient_id, visit_date, complaint, treatment, temperature_c, blood_pressure, pulse_bpm, weight_kg, charge_amount, payment_amount, payment_method, notes, created_by_staff_id)
       VALUES (@patientId, @visitDate, @complaint, @treatment, @temperatureC, @bloodPressure, @pulseBpm, @weightKg, @chargeAmount, @paymentAmount, @paymentMethod, @notes, @createdByStaffId)
@@ -166,6 +171,13 @@ function createDb(dbPath) {
       LEFT JOIN staff s ON s.id = v.created_by_staff_id
       WHERE v.patient_id = ?
       ORDER BY v.visit_date DESC, v.id DESC
+    `),
+    listAllVisits: conn.prepare(`
+      SELECT v.*, p.first_name, p.last_name, s.name AS recorded_by_name
+      FROM visits v
+      JOIN patients p ON p.id = v.patient_id
+      LEFT JOIN staff s ON s.id = v.created_by_staff_id
+      ORDER BY v.visit_date, v.id
     `),
     getSetting: conn.prepare(`SELECT value FROM settings WHERE key = ?`),
     setSetting: conn.prepare(`
@@ -224,6 +236,7 @@ function createDb(dbPath) {
       SELECT * FROM drugs WHERE name LIKE @term ORDER BY name LIMIT 200
     `),
     listDrugs: conn.prepare(`SELECT * FROM drugs ORDER BY name LIMIT 200`),
+    listAllDrugs: conn.prepare(`SELECT * FROM drugs ORDER BY name`),
     updateDrugQuantity: conn.prepare(`
       UPDATE drugs SET quantity_on_hand = @quantityOnHand WHERE id = @id
     `),
@@ -313,6 +326,14 @@ function createDb(dbPath) {
         return stmts.searchPatients.all({ term: `%${searchTerm.trim()}%` });
       }
       return stmts.listPatients.all();
+    },
+
+    listAllPatients() {
+      return stmts.listAllPatients.all();
+    },
+
+    listAllVisits() {
+      return stmts.listAllVisits.all();
     },
 
     addVisit({ patientId, visitDate, complaint, treatment, temperatureC, bloodPressure, pulseBpm, weightKg, chargeAmount, paymentAmount, paymentMethod, notes, createdByStaffId }) {
@@ -409,6 +430,10 @@ function createDb(dbPath) {
         return stmts.searchDrugs.all({ term: `%${searchTerm.trim()}%` });
       }
       return stmts.listDrugs.all();
+    },
+
+    listAllDrugs() {
+      return stmts.listAllDrugs.all();
     },
 
     // Adds to stock (a new delivery arriving). If a new expiry date is

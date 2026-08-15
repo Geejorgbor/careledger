@@ -12,6 +12,7 @@ const { hashPassword, verifyPassword } = require('../src/main/auth');
 const { createSession } = require('../src/main/session');
 const { timestampedFilename, pruneOldBackups, runAutoBackup } = require('../src/main/backup');
 const { canManageStaffAndSettings, canUseDispensary } = require('../src/main/permissions');
+const { toCsvValue, toCsv } = require('../src/main/csv');
 
 // The app's SQL uses date('now', 'localtime') for "today" — toISOString()
 // is UTC, which drifts a day off from local "today" for part of every day
@@ -528,6 +529,46 @@ async function run() {
   assert.strictEqual(patientAppts.length, 2, 'patient should have both appointments in their history');
 
   db6.close();
+
+  // CSV export
+  assert.strictEqual(toCsvValue(null), '');
+  assert.strictEqual(toCsvValue(undefined), '');
+  assert.strictEqual(toCsvValue(42), '42');
+  assert.strictEqual(toCsvValue('plain'), 'plain');
+  assert.strictEqual(toCsvValue('has,comma'), '"has,comma"');
+  assert.strictEqual(toCsvValue('has "quotes"'), '"has ""quotes"""');
+  assert.strictEqual(toCsvValue('has\nnewline'), '"has\nnewline"');
+
+  const csv = toCsv(
+    [{ name: 'Mary, Kollie', notes: 'said "hello"' }, { name: 'James', notes: '' }],
+    [{ key: 'name', header: 'Name' }, { key: 'notes', header: 'Notes' }]
+  );
+  const csvLines = csv.split('\r\n');
+  assert.strictEqual(csvLines[0], 'Name,Notes');
+  assert.strictEqual(csvLines[1], '"Mary, Kollie","said ""hello"""');
+  assert.strictEqual(csvLines[2], 'James,');
+
+  // Export queries: unlimited (unlike the on-screen lists) and correctly joined
+  const db7 = createDb(':memory:');
+  const exportStaff = db7.addStaff({ name: 'Export Nurse', role: 'Nurse', username: 'exportnurse', password: 'pw' });
+  const exportPatient = db7.addPatient({ firstName: 'Export', lastName: 'Patient' });
+  db7.addVisit({ patientId: exportPatient.id, visitDate: today, complaint: 'Cough', paymentAmount: 12, createdByStaffId: exportStaff.id });
+  db7.addDrug({ name: 'Export Drug', unit: 'tablet', quantityOnHand: 10, reorderLevel: 2 });
+
+  const exportedPatients = db7.listAllPatients();
+  assert.strictEqual(exportedPatients.length, 1);
+  assert.strictEqual(exportedPatients[0].first_name, 'Export');
+
+  const exportedVisits = db7.listAllVisits();
+  assert.strictEqual(exportedVisits.length, 1);
+  assert.strictEqual(exportedVisits[0].first_name, 'Export', 'exported visits should include the patient name via join');
+  assert.strictEqual(exportedVisits[0].recorded_by_name, 'Export Nurse', 'exported visits should include who recorded it');
+
+  const exportedDrugs = db7.listAllDrugs();
+  assert.strictEqual(exportedDrugs.length, 1);
+  assert.strictEqual(exportedDrugs[0].name, 'Export Drug');
+
+  db7.close();
 
   console.log('All db.js tests passed.');
 }

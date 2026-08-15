@@ -172,13 +172,24 @@ instead of something still being built:
 - A brief loading spinner in tables while data is being fetched, instead
   of a blank flash before content appears.
 
+**Export Data (CSV)** — **Settings → Export Data** saves Patients, Visits
+(with charged/paid/balance and who recorded each one), or Drug inventory
+as a `.csv` file that opens directly in Excel or Google Sheets — useful
+for handing records to an accountant or reporting to a health authority.
+Unlike the on-screen lists (capped at 200 rows for a snappy screen), these
+exports always include everything, with no limit.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
 receipts, role-based permissions, vital signs, appointment scheduling,
 automatic app updates, the clinic logo (white-labeling / Section 7 is now
-fully done), and this visual polish pass.
+fully done), the visual polish pass, and CSV export.
 What's left is what the plan calls the "optional extra layer": cloud
-backup and phone access.
+backup and phone access — plus two flagged-but-not-built security/UX
+items: auto-logout after inactivity, and encrypting the database file at
+rest (right now, `careledger.db` is plain SQLite — anyone with direct file
+access to a stolen computer could read it outside the app entirely,
+bypassing the login screen).
 
 ## How to run it
 
@@ -240,6 +251,9 @@ folder, ready to hand to someone.
   - `updater.js` — checks GitHub for a newer version and quietly downloads
     it; failures (e.g. no internet) are logged and otherwise ignored, never
     shown to the user or allowed to disrupt the app.
+  - `csv.js` — turns rows + column definitions into proper CSV text
+    (handles commas/quotes/newlines correctly). No database or Electron
+    code, so it's directly unit-tested.
   - `main.js` — opens the app window, starts everything up, and schedules
     the automatic backup (shortly after opening, then hourly) and the
     update check.

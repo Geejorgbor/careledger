@@ -54,6 +54,10 @@ const els = {
   btnBackupNow: document.getElementById('btn-backup-now'),
   btnBackupExport: document.getElementById('btn-backup-export'),
 
+  btnExportPatients: document.getElementById('btn-export-patients'),
+  btnExportVisits: document.getElementById('btn-export-visits'),
+  btnExportDrugs: document.getElementById('btn-export-drugs'),
+
   appVersion: document.getElementById('app-version'),
   btnCheckUpdates: document.getElementById('btn-check-updates'),
   updateStatus: document.getElementById('update-status'),
@@ -805,6 +809,26 @@ els.btnBackupExport.addEventListener('click', async () => {
     els.btnBackupExport.disabled = false;
   }
 });
+
+// ---------- Data export ----------
+
+async function runExport(button, exportFn) {
+  button.disabled = true;
+  try {
+    const result = await exportFn();
+    if (!result.canceled) {
+      alert(`Saved to:\n${result.filePath}`);
+    }
+  } catch (err) {
+    alert(`Export failed: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+els.btnExportPatients.addEventListener('click', () => runExport(els.btnExportPatients, window.careledger.exportPatients));
+els.btnExportVisits.addEventListener('click', () => runExport(els.btnExportVisits, window.careledger.exportVisits));
+els.btnExportDrugs.addEventListener('click', () => runExport(els.btnExportDrugs, window.careledger.exportDrugs));
 
 // ---------- Updates ----------
 

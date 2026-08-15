@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { runAutoBackup } = require('./backup');
 const { autoUpdater } = require('./updater');
+const { toCsv } = require('./csv');
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3MB — a clinic logo should never need to be bigger
 const LOGO_MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif' };
@@ -185,6 +186,76 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     }
     const result = await autoUpdater.checkForUpdates();
     return { version: result && result.updateInfo ? result.updateInfo.version : app.getVersion() };
+  });
+
+  // ---------- Data export ----------
+  async function exportToCsv(defaultFilename, rows, columns) {
+    const win = BrowserWindow.getAllWindows()[0];
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: 'Export Data',
+      defaultPath: defaultFilename,
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (canceled || !filePath) return { canceled: true };
+    fs.writeFileSync(filePath, toCsv(rows, columns));
+    return { canceled: false, filePath };
+  }
+
+  const todayStamp = () => new Date().toISOString().slice(0, 10);
+
+  handle('export:patients', async () => {
+    session.requireLogin();
+    const rows = db.listAllPatients();
+    const columns = [
+      { key: 'first_name', header: 'First Name' },
+      { key: 'last_name', header: 'Last Name' },
+      { key: 'date_of_birth', header: 'Date of Birth' },
+      { key: 'gender', header: 'Gender' },
+      { key: 'phone', header: 'Phone' },
+      { key: 'address', header: 'Address' },
+      { key: 'created_at', header: 'Registered At' },
+    ];
+    return exportToCsv(`careledger-patients-${todayStamp()}.csv`, rows, columns);
+  });
+
+  handle('export:visits', async () => {
+    session.requireLogin();
+    const rows = db.listAllVisits().map((v) => ({
+      ...v,
+      patient_name: `${v.first_name} ${v.last_name}`,
+      balance: v.charge_amount - v.payment_amount,
+    }));
+    const columns = [
+      { key: 'visit_date', header: 'Visit Date' },
+      { key: 'patient_name', header: 'Patient' },
+      { key: 'complaint', header: 'Complaint' },
+      { key: 'treatment', header: 'Treatment' },
+      { key: 'temperature_c', header: 'Temperature (C)' },
+      { key: 'blood_pressure', header: 'Blood Pressure' },
+      { key: 'pulse_bpm', header: 'Pulse (bpm)' },
+      { key: 'weight_kg', header: 'Weight (kg)' },
+      { key: 'charge_amount', header: 'Charged' },
+      { key: 'payment_amount', header: 'Paid' },
+      { key: 'balance', header: 'Balance' },
+      { key: 'payment_method', header: 'Payment Method' },
+      { key: 'notes', header: 'Notes' },
+      { key: 'recorded_by_name', header: 'Recorded By' },
+    ];
+    return exportToCsv(`careledger-visits-${todayStamp()}.csv`, rows, columns);
+  });
+
+  handle('export:drugs', async () => {
+    session.requireLogin();
+    const rows = db.listAllDrugs();
+    const columns = [
+      { key: 'name', header: 'Name' },
+      { key: 'unit', header: 'Unit' },
+      { key: 'quantity_on_hand', header: 'Quantity On Hand' },
+      { key: 'reorder_level', header: 'Reorder Level' },
+      { key: 'expiry_date', header: 'Expiry Date' },
+      { key: 'notes', header: 'Notes' },
+    ];
+    return exportToCsv(`careledger-drugs-${todayStamp()}.csv`, rows, columns);
   });
 
   // ---------- Settings ----------
