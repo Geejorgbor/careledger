@@ -13,6 +13,7 @@ const { createSession } = require('../src/main/session');
 const { timestampedFilename, pruneOldBackups, runAutoBackup } = require('../src/main/backup');
 const { canManageStaffAndSettings, canUseDispensary } = require('../src/main/permissions');
 const { toCsvValue, toCsv } = require('../src/main/csv');
+const { parseLicenseEntry } = require('../src/main/licenseSync');
 
 // The app's SQL uses date('now', 'localtime') for "today" — toISOString()
 // is UTC, which drifts a day off from local "today" for part of every day
@@ -569,6 +570,33 @@ async function run() {
   assert.strictEqual(exportedDrugs[0].name, 'Export Drug');
 
   db7.close();
+
+  // Clinic id: stable across calls, unique per database
+  const db8 = createDb(':memory:');
+  const clinicIdFirstCall = db8.getOrCreateClinicId();
+  assert.ok(clinicIdFirstCall, 'clinic id should be generated');
+  assert.strictEqual(db8.getOrCreateClinicId(), clinicIdFirstCall, 'clinic id should be stable across calls');
+
+  const db9 = createDb(':memory:');
+  assert.notStrictEqual(db9.getOrCreateClinicId(), clinicIdFirstCall, 'clinic id should differ per install');
+  db8.close();
+  db9.close();
+
+  // Remote license file parsing (licenseSync.js) — pure logic, no network
+  assert.strictEqual(parseLicenseEntry('not json', 'abc'), null, 'malformed JSON should be treated as no update');
+  assert.strictEqual(parseLicenseEntry('{}', 'abc'), null, 'unknown clinic id should be treated as no update');
+  assert.strictEqual(
+    parseLicenseEntry('{"abc": {"expiresAt": "not-a-date-field"}}', 'xyz'),
+    null,
+    'a different clinic id in the file should not match'
+  );
+  assert.strictEqual(
+    parseLicenseEntry('{"abc": {}}', 'abc'),
+    null,
+    'an entry with no expiresAt should be treated as no update'
+  );
+  const match = parseLicenseEntry('{"abc": {"expiresAt": "2027-01-15", "clinicName": "Test Clinic"}}', 'abc');
+  assert.deepStrictEqual(match, { expiresAt: '2027-01-15' });
 
   console.log('All db.js tests passed.');
 }

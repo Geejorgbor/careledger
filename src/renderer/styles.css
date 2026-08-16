@@ -306,7 +306,18 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   gap: 12px;
   max-width: 360px;
 }
-#settings-form label, #license-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+#settings-form label, #license-form label, .clinic-id-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+
+.clinic-id-label {
+  max-width: 360px;
+  margin-bottom: 14px;
+}
+#settings-clinic-id {
+  background: #f0f2f1;
+  color: var(--color-text);
+  font-family: monospace;
+  font-size: 13px;
+}
 
 .plan-buttons {
   display: flex;

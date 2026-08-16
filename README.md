@@ -194,6 +194,24 @@ auto-fill the date field with today + 3 or + 10 months, matching
 PayeConnect's actual pricing plans, so setting a clinic's renewal date
 doesn't require doing the math by hand.
 
+**Remote subscription renewal.** Every installed copy of CareLedger gets
+its own random **Clinic ID** the first time it runs (shown, read-only, on
+**Settings → Subscription**). When a clinic renews, PayeConnect adds or
+updates that Clinic ID's entry in `licenses.json` (a small file kept in
+this same GitHub repo) with the new expiry date and pushes it. Every
+running copy of the app quietly checks that file shortly after it starts,
+and again every 6 hours — if it finds its own Clinic ID with a new date,
+it adopts it automatically and the banner updates immediately, with no
+action needed on the clinic's computer at all (as long as that computer
+has internet at some point). If a clinic is offline, has no internet, or
+isn't listed in the file yet, nothing happens — the app just keeps using
+whatever date was last set locally, same as before this feature existed.
+This is a convenience, not a security feature: `licenses.json` lives in
+the same **public** repo as the rest of the code, so it's not a place to
+put anything sensitive, and a technical user could still edit their own
+copy's local database directly to bypass it (same limitation the warning
+banner itself already has — see above).
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
 receipts, role-based permissions, vital signs, appointment scheduling,
@@ -270,9 +288,14 @@ folder, ready to hand to someone.
   - `csv.js` — turns rows + column definitions into proper CSV text
     (handles commas/quotes/newlines correctly). No database or Electron
     code, so it's directly unit-tested.
+  - `licenseSync.js` — checks the `licenses.json` file in this GitHub repo
+    for this install's Licensed Until date and adopts it locally if found
+    (see "Remote subscription renewal" below). Failures are always treated
+    as "nothing to update," never shown to the user.
   - `main.js` — opens the app window, starts everything up, and schedules
-    the automatic backup (shortly after opening, then hourly) and the
-    update check.
+    the automatic backup (shortly after opening, then hourly), the update
+    check, and the remote license check (shortly after opening, then every
+    6 hours).
 - **`src/preload/preload.js`** — a safety bridge. It only lets the screen
   call the specific actions listed here (add patient, list patients, etc.),
   nothing else. This keeps the app secure.

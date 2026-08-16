@@ -260,6 +260,10 @@ function registerIpcHandlers(db, session, getBackupsDir) {
 
   // ---------- Settings ----------
   handle('settings:get', (key) => db.getSetting(key));
+  handle('settings:getClinicId', () => {
+    session.requireLogin();
+    return db.getOrCreateClinicId();
+  });
   handle('settings:set', (key, value) => {
     session.requireAdmin();
     db.setSetting(key, value);

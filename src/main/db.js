@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { hashPassword } = require('./auth');
 
 const SCHEMA = `
@@ -405,6 +406,18 @@ function createDb(dbPath) {
 
     setSetting(key, value) {
       stmts.setSetting.run({ key, value });
+    },
+
+    // A stable random id for this one installed copy of the app, used to
+    // look it up in the remote licenses file (see licenseSync.js) without
+    // exposing anything identifying about the clinic itself. Created once,
+    // on first use, and never changes after that.
+    getOrCreateClinicId() {
+      const existing = stmts.getSetting.get('clinicId');
+      if (existing && existing.value) return existing.value;
+      const id = crypto.randomUUID();
+      stmts.setSetting.run({ key: 'clinicId', value: id });
+      return id;
     },
 
     addDrug({ name, unit, quantityOnHand, reorderLevel, expiryDate, notes, createdByStaffId }) {

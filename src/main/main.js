@@ -5,9 +5,13 @@ const { registerIpcHandlers } = require('./ipc');
 const { createSession } = require('./session');
 const { runAutoBackup } = require('./backup');
 const { checkForUpdatesQuietly } = require('./updater');
+const { checkRemoteLicense } = require('./licenseSync');
 
 const AUTO_BACKUP_INTERVAL_MS = 60 * 60 * 1000; // hourly
 const FIRST_AUTO_BACKUP_DELAY_MS = 10 * 1000; // shortly after startup, not blocking it
+
+const LICENSE_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6 hours
+const FIRST_LICENSE_SYNC_DELAY_MS = 15 * 1000; // shortly after startup, not blocking it
 
 let mainWindow;
 let db;
@@ -41,6 +45,24 @@ async function performAutoBackup() {
   }
 }
 
+async function performLicenseSync() {
+  try {
+    const clinicId = db.getOrCreateClinicId();
+    const remote = await checkRemoteLicense(clinicId);
+    if (!remote) return; // offline, file missing, or this clinic not listed — nothing to do
+    if (remote.expiresAt === db.getSetting('licenseExpiresAt')) return; // already up to date
+
+    db.setSetting('licenseExpiresAt', remote.expiresAt);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('license:updated', remote.expiresAt);
+    }
+  } catch (err) {
+    // Same rule as backups and updates: a remote-license hiccup must never
+    // crash the app or interrupt anyone using it.
+    console.error('License sync failed:', err.message);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100,
@@ -62,6 +84,9 @@ app.whenReady().then(() => {
 
   setTimeout(performAutoBackup, FIRST_AUTO_BACKUP_DELAY_MS);
   setInterval(performAutoBackup, AUTO_BACKUP_INTERVAL_MS);
+
+  setTimeout(performLicenseSync, FIRST_LICENSE_SYNC_DELAY_MS);
+  setInterval(performLicenseSync, LICENSE_SYNC_INTERVAL_MS);
 
   // Only checks in the real installed app — during development (npm
   // start) there's no packaged update artifact to compare against.

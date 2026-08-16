@@ -93,6 +93,7 @@ const els = {
   licenseBanner: document.getElementById('license-banner'),
   btnPlan3mo: document.getElementById('btn-plan-3mo'),
   btnPlan10mo: document.getElementById('btn-plan-10mo'),
+  settingsClinicId: document.getElementById('settings-clinic-id'),
 
   modalNewPatient: document.getElementById('modal-new-patient'),
   formNewPatient: document.getElementById('form-new-patient'),
@@ -712,7 +713,14 @@ async function loadSettings() {
   const licenseExpiresAt = await window.careledger.getSetting('licenseExpiresAt');
   if (licenseExpiresAt) els.settingsLicenseDate.value = licenseExpiresAt;
   updateLicenseBanner(licenseExpiresAt);
+
+  els.settingsClinicId.value = await window.careledger.getClinicId();
 }
+
+window.careledger.onLicenseUpdated((expiresAtStr) => {
+  els.settingsLicenseDate.value = expiresAtStr || '';
+  updateLicenseBanner(expiresAtStr);
+});
 
 function daysUntil(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
