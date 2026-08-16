@@ -194,7 +194,8 @@ auto-fill the date field with today + 3 or + 10 months, matching
 PayeConnect's actual pricing plans, so setting a clinic's renewal date
 doesn't require doing the math by hand.
 
-**Remote subscription renewal.** Every installed copy of CareLedger gets
+**Remote subscription renewal** (fetched from `licenses.json` on the
+`master` branch of this repo). Every installed copy of CareLedger gets
 its own random **Clinic ID** the first time it runs (shown, read-only, on
 **Settings → Subscription**). When a clinic renews, PayeConnect adds or
 updates that Clinic ID's entry in `licenses.json` (a small file kept in
