@@ -189,6 +189,10 @@ freely either way. It relies on PayeConnect following up directly with
 each clinic; it is not a real anti-piracy measure (the app's source and
 releases are on a public GitHub repo, so a technical user could always
 bypass or ignore the banner). If no date is set, the banner never shows.
+Two quick-select buttons — "3 Months — $70" and "10 Months — $150" —
+auto-fill the date field with today + 3 or + 10 months, matching
+PayeConnect's actual pricing plans, so setting a clinic's renewal date
+doesn't require doing the math by hand.
 
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
