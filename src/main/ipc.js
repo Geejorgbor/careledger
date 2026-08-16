@@ -4,9 +4,11 @@ const path = require('path');
 const { runAutoBackup } = require('./backup');
 const { autoUpdater } = require('./updater');
 const { toCsv } = require('./csv');
+const { sendChatMessage } = require('./assistant');
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3MB — a clinic logo should never need to be bigger
 const LOGO_MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif' };
+const AI_DAILY_MESSAGE_LIMIT = 100;
 
 /**
  * Wires renderer IPC channels to the database layer. Every handler is
@@ -124,6 +126,59 @@ function registerIpcHandlers(db, session, getBackupsDir) {
       newPatientsByMonth: db.getNewPatientsByMonth(),
       topIllnesses: db.getTopIllnessesLast6Months(),
     };
+  });
+
+  // ---------- AI Assistant (10-Month plan bonus) ----------
+  handle('assistant:getSettings', () => {
+    session.requireLogin();
+    return {
+      assistantName: db.getSetting('aiAssistantName') || 'CareLedger Assistant',
+      hasApiKey: Boolean(db.getSetting('aiApiKey')),
+      isEligiblePlan: db.getSetting('licensePlan') === '10month',
+    };
+  });
+
+  handle('assistant:saveSettings', ({ assistantName, apiKey }) => {
+    session.requireAdmin();
+    if (assistantName != null) db.setSetting('aiAssistantName', assistantName.trim());
+    if (apiKey) db.setSetting('aiApiKey', apiKey.trim());
+  });
+
+  handle('assistant:sendMessage', async ({ history, message }) => {
+    session.requireLogin();
+    if (db.getSetting('licensePlan') !== '10month') {
+      throw new Error('The Assistant is only available on the 10-Month plan.');
+    }
+    const apiKey = db.getSetting('aiApiKey');
+    if (!apiKey) {
+      throw new Error('Ask an Admin to add an API key in Settings → AI Assistant first.');
+    }
+    if (!db.checkAndConsumeAiMessageQuota(AI_DAILY_MESSAGE_LIMIT)) {
+      throw new Error(`Reached today's limit of ${AI_DAILY_MESSAGE_LIMIT} assistant messages. Please try again tomorrow.`);
+    }
+
+    const assistantName = db.getSetting('aiAssistantName') || 'CareLedger Assistant';
+    const dashboard = db.getDashboardSummary();
+    const outstanding = db.listOutstandingBalances();
+    const contextSummary = {
+      patientsSeenToday: dashboard.patientsToday,
+      patientsSeenThisWeek: dashboard.patientsThisWeek,
+      incomeToday: dashboard.incomeToday,
+      appointmentsToday: dashboard.appointmentsToday,
+      lowStockDrugCount: dashboard.lowStockDrugs.length,
+      expiringSoonDrugCount: dashboard.expiringSoonDrugs.length,
+      outstandingBalanceCount: outstanding.length,
+      outstandingBalanceTotal: outstanding.reduce((sum, o) => sum + o.balance, 0),
+    };
+
+    const reply = await sendChatMessage({
+      apiKey,
+      assistantName,
+      contextSummary,
+      history: history || [],
+      message,
+    });
+    return { reply, assistantName };
   });
 
   // ---------- Dispensary ----------

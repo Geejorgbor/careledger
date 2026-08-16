@@ -236,6 +236,28 @@ put anything sensitive, and a technical user could still edit their own
 copy's local database directly to bypass it (same limitation the warning
 banner itself already has — see above).
 
+**AI Assistant (10-Month plan bonus)** — an in-app chat tab (`Assistant`)
+where clinic staff can ask questions and get help using CareLedger, backed
+by a real AI (Anthropic's API). An Admin sets it up in **Settings → AI
+Assistant**: pick a name for it, and paste in an API key. A few rules are
+built into it and can't be turned off:
+- It always identifies itself as an automated assistant if asked — it is
+  never allowed to claim to be a specific real person, however it's named.
+- It cannot edit, delete, or create any records itself. If it can help
+  someone fix something, it tells them exactly which screen/button to
+  use — it never claims to have made a change on its own.
+- If something sounds urgent or it's genuinely unsure, it says so and
+  points the clinic to call PayeConnect directly.
+
+It's given a live read-only snapshot of the clinic's own data (today's
+patient count, income, low-stock/expiring drugs, outstanding balances) so
+it can answer naturally instead of generically. A simple daily cap (100
+messages, `checkAndConsumeAiMessageQuota()` in db.js) protects against a
+runaway bill from misuse. This needs internet at the moment someone asks
+it something (unlike the rest of the app) and a real, paid API key —
+CareLedger has no AI account of its own, so this only works once one has
+been added in Settings.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
 receipts, role-based permissions, vital signs, appointment scheduling,
@@ -316,6 +338,10 @@ folder, ready to hand to someone.
     for this install's Licensed Until date and adopts it locally if found
     (see "Remote subscription renewal" below). Failures are always treated
     as "nothing to update," never shown to the user.
+  - `assistant.js` — builds the AI Assistant's system prompt (identity
+    rules + the clinic's live data snapshot) and calls Anthropic's API.
+    No database or Electron code, so the prompt-building half is directly
+    unit-tested without needing a real API key.
   - `main.js` — opens the app window, starts everything up, and schedules
     the automatic backup (shortly after opening, then hourly), the update
     check, and the remote license check (shortly after opening, then every

@@ -52,4 +52,8 @@ contextBridge.exposeInMainWorld('careledger', {
     ipcRenderer.on('license:updated', (_event, data) => callback(data));
   },
   getTrends: () => unwrap(ipcRenderer.invoke('reports:trends')),
+
+  getAssistantSettings: () => unwrap(ipcRenderer.invoke('assistant:getSettings')),
+  saveAssistantSettings: (data) => unwrap(ipcRenderer.invoke('assistant:saveSettings', data)),
+  sendAssistantMessage: (history, message) => unwrap(ipcRenderer.invoke('assistant:sendMessage', { history, message })),
 });

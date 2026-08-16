@@ -104,6 +104,19 @@ const els = {
   trendIllnessesTableBody: document.getElementById('trend-illnesses-table-body'),
   trendIllnessesEmpty: document.getElementById('trend-illnesses-empty'),
 
+  navAssistant: document.getElementById('nav-assistant'),
+  assistantTitle: document.getElementById('assistant-title'),
+  assistantNotReady: document.getElementById('assistant-not-ready'),
+  assistantChat: document.getElementById('assistant-chat'),
+  assistantMessages: document.getElementById('assistant-messages'),
+  assistantForm: document.getElementById('assistant-form'),
+  assistantInput: document.getElementById('assistant-input'),
+  assistantError: document.getElementById('assistant-error'),
+  assistantSettingsForm: document.getElementById('assistant-settings-form'),
+  settingsAssistantName: document.getElementById('settings-assistant-name'),
+  settingsAssistantApiKey: document.getElementById('settings-assistant-api-key'),
+  assistantSettingsSaved: document.getElementById('assistant-settings-saved'),
+
   modalNewPatient: document.getElementById('modal-new-patient'),
   formNewPatient: document.getElementById('form-new-patient'),
   modalNewVisit: document.getElementById('modal-new-visit'),
@@ -243,6 +256,8 @@ els.btnLogout.addEventListener('click', async () => {
   currentPatient = null;
   currentDrugId = null;
   currentStaffRole = null;
+  assistantHistory = [];
+  els.assistantMessages.innerHTML = '';
   switchView('dashboard');
   await initAuth();
 });
@@ -266,6 +281,9 @@ function applyPermissionsToUI(role) {
   els.btnNewStaff.hidden = !isAdmin;
   els.settingsClinicName.disabled = !isAdmin;
   els.settingsForm.querySelector('button[type="submit"]').hidden = !isAdmin;
+  els.assistantSettingsForm.querySelector('button[type="submit"]').hidden = !isAdmin;
+  els.settingsAssistantName.disabled = !isAdmin;
+  els.settingsAssistantApiKey.disabled = !isAdmin;
 
   els.btnNewDrug.hidden = !canDispense;
   els.btnRestockDrug.hidden = !canDispense;
@@ -621,6 +639,65 @@ async function loadTrends() {
   }
 }
 
+// ---------- Assistant (10-Month plan bonus) ----------
+
+let assistantHistory = [];
+
+function renderAssistantMessage(role, text) {
+  const div = document.createElement('div');
+  div.className = `assistant-message ${role}`;
+  div.textContent = text;
+  els.assistantMessages.appendChild(div);
+  els.assistantMessages.scrollTop = els.assistantMessages.scrollHeight;
+}
+
+async function loadAssistantSettings() {
+  const settings = await window.careledger.getAssistantSettings();
+  els.assistantTitle.textContent = settings.assistantName;
+  els.settingsAssistantName.value = settings.assistantName;
+  els.settingsAssistantApiKey.placeholder = settings.hasApiKey ? 'Already set — leave blank to keep it' : 'sk-ant-...';
+
+  const assistantEligible = settings.isEligiblePlan && settings.hasApiKey;
+  els.assistantNotReady.hidden = assistantEligible;
+  els.assistantChat.hidden = !assistantEligible;
+}
+
+els.assistantForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = els.assistantInput.value.trim();
+  if (!message) return;
+
+  els.assistantError.hidden = true;
+  renderAssistantMessage('user', message);
+  els.assistantInput.value = '';
+  els.assistantInput.disabled = true;
+
+  try {
+    const { reply } = await window.careledger.sendAssistantMessage(assistantHistory, message);
+    assistantHistory.push({ role: 'user', content: message });
+    assistantHistory.push({ role: 'assistant', content: reply });
+    renderAssistantMessage('assistant', reply);
+  } catch (err) {
+    els.assistantError.textContent = err.message;
+    els.assistantError.hidden = false;
+  } finally {
+    els.assistantInput.disabled = false;
+    els.assistantInput.focus();
+  }
+});
+
+els.assistantSettingsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await window.careledger.saveAssistantSettings({
+    assistantName: els.settingsAssistantName.value.trim(),
+    apiKey: els.settingsAssistantApiKey.value.trim(),
+  });
+  els.settingsAssistantApiKey.value = '';
+  await loadAssistantSettings();
+  els.assistantSettingsSaved.hidden = false;
+  setTimeout(() => { els.assistantSettingsSaved.hidden = true; }, 1500);
+});
+
 // ---------- Billing ----------
 
 async function loadBilling() {
@@ -814,6 +891,7 @@ let pendingLicensePlan = null;
 
 function applyPlanToUI(plan) {
   els.navTrends.hidden = plan !== '10month';
+  els.navAssistant.hidden = plan !== '10month';
 }
 
 window.careledger.onLicenseUpdated(({ expiresAt, plan }) => {
@@ -1054,7 +1132,8 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'dispensary') loadDrugs();
     if (btn.dataset.view === 'appointments') loadAppointments();
     if (btn.dataset.view === 'trends') loadTrends();
-    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); }
+    if (btn.dataset.view === 'assistant') loadAssistantSettings();
+    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); loadAssistantSettings(); }
   });
 });
 

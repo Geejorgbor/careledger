@@ -54,6 +54,7 @@
           <button data-view="dispensary" class="nav-btn">Dispensary</button>
           <button data-view="appointments" class="nav-btn">Appointments</button>
           <button data-view="trends" class="nav-btn" id="nav-trends" hidden>Trends</button>
+          <button data-view="assistant" class="nav-btn" id="nav-assistant" hidden>Assistant</button>
           <button data-view="settings" class="nav-btn">Settings</button>
         </nav>
         <div id="header-user">
@@ -317,6 +318,23 @@
         <p id="trend-illnesses-empty" class="empty-state" hidden>No visits recorded yet in the last 6 months.</p>
       </section>
 
+      <!-- ASSISTANT VIEW (10-Month plan bonus) -->
+      <section id="view-assistant" class="view">
+        <h2 id="assistant-title">Assistant</h2>
+        <p class="empty-state" id="assistant-not-ready" hidden>
+          The Assistant hasn't been set up yet. Ask an Admin to add an API key in
+          Settings → AI Assistant.
+        </p>
+        <div id="assistant-chat">
+          <div id="assistant-messages"></div>
+          <form id="assistant-form">
+            <input id="assistant-input" type="text" placeholder="Ask a question…" autocomplete="off" />
+            <button type="submit" class="primary">Send</button>
+          </form>
+          <p id="assistant-error" class="auth-error" hidden></p>
+        </div>
+      </section>
+
       <!-- SETTINGS VIEW -->
       <section id="view-settings" class="view">
         <h2>Clinic Settings</h2>
@@ -355,6 +373,22 @@
           <button type="submit" class="primary">Save</button>
         </form>
         <p id="license-saved" class="empty-state" hidden>Saved.</p>
+
+        <h2>AI Assistant (10-Month Plan)</h2>
+        <form id="assistant-settings-form">
+          <label>
+            Assistant Name
+            <input id="settings-assistant-name" type="text" placeholder="e.g. CareLedger Assistant" />
+          </label>
+          <label>
+            API Key
+            <input id="settings-assistant-api-key" type="password" placeholder="sk-ant-..." autocomplete="off" />
+          </label>
+          <button type="submit" class="primary">Save</button>
+        </form>
+        <p id="assistant-settings-saved" class="empty-state" hidden>Saved.</p>
+        <p class="auth-sub">Needs internet at the moment someone asks it something, and only works on the
+          10-Month plan. Ask PayeConnect for help getting an API key.</p>
 
         <h3>Clinic Logo</h3>
         <p class="auth-sub">Shown at the top of the app and on printed receipts, so it feels made just for your clinic.</p>

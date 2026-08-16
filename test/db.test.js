@@ -14,6 +14,7 @@ const { timestampedFilename, pruneOldBackups, runAutoBackup } = require('../src/
 const { canManageStaffAndSettings, canUseDispensary } = require('../src/main/permissions');
 const { toCsvValue, toCsv } = require('../src/main/csv');
 const { parseLicenseEntry } = require('../src/main/licenseSync');
+const { buildSystemPrompt } = require('../src/main/assistant');
 
 // The app's SQL uses date('now', 'localtime') for "today" — toISOString()
 // is UTC, which drifts a day off from local "today" for part of every day
@@ -628,7 +629,21 @@ async function run() {
   const topIllnesses = db10.getTopIllnessesLast6Months();
   assert.strictEqual(topIllnesses[0].complaint, 'Malaria');
   assert.strictEqual(topIllnesses[0].n, 2);
+
+  // AI Assistant (10-Month plan bonus): daily message quota
+  for (let i = 0; i < 5; i++) {
+    assert.strictEqual(db10.checkAndConsumeAiMessageQuota(5), true, `message ${i + 1} of 5 should be allowed, still under the daily limit`);
+  }
+  assert.strictEqual(db10.checkAndConsumeAiMessageQuota(5), false, 'a 6th message should be blocked once the daily limit of 5 is reached');
   db10.close();
+
+  // AI Assistant: system prompt always tells the truth about being an AI,
+  // and never lets a clinic-chosen name make it claim to be a real person
+  const prompt = buildSystemPrompt('Nana', { patientsSeenToday: 3 });
+  assert.ok(prompt.includes('Nana'), 'system prompt should use the configured assistant name');
+  assert.ok(/automated assistant/i.test(prompt), 'system prompt must identify itself as automated');
+  assert.ok(/not a human/i.test(prompt) || /not a real person/i.test(prompt), 'system prompt must rule out claiming to be human');
+  assert.ok(prompt.includes('"patientsSeenToday": 3'), 'system prompt should include the live data snapshot');
 
   console.log('All db.js tests passed.');
 }

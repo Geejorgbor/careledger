@@ -479,6 +479,26 @@ function createDb(dbPath) {
       return id;
     },
 
+    // A simple daily cap on Assistant messages, so a runaway loop or a
+    // curious kid mashing "send" can't quietly rack up an unexpected AI
+    // bill for the clinic. Resets automatically at local midnight.
+    checkAndConsumeAiMessageQuota(dailyLimit) {
+      const pad = (n) => String(n).padStart(2, '0');
+      const now = new Date();
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      const storedDateRow = stmts.getSetting.get('aiMessagesDate');
+      const storedCountRow = stmts.getSetting.get('aiMessagesToday');
+      const storedDate = storedDateRow ? storedDateRow.value : null;
+      const count = storedDate === today && storedCountRow ? Number(storedCountRow.value) : 0;
+
+      if (count >= dailyLimit) return false;
+
+      stmts.setSetting.run({ key: 'aiMessagesDate', value: today });
+      stmts.setSetting.run({ key: 'aiMessagesToday', value: String(count + 1) });
+      return true;
+    },
+
     addDrug({ name, unit, quantityOnHand, reorderLevel, expiryDate, notes, createdByStaffId }) {
       requireNonEmpty(name, 'name');
       const info = stmts.insertDrug.run({
