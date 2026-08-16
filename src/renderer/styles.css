@@ -325,6 +325,41 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
   margin-bottom: 14px;
 }
 
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 140px;
+  margin: 0 0 28px 0;
+  padding: 0 4px;
+}
+.trend-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+.trend-bar-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+.trend-bar-fill {
+  width: 100%;
+  background: var(--color-primary);
+  border-radius: 4px 4px 0 0;
+  min-height: 3px;
+  transition: height 0.3s ease;
+}
+.trend-bar-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+}
+
 #license-banner {
   padding: 10px 24px;
   font-size: 13px;

@@ -4,6 +4,19 @@ const path = require('path');
 const crypto = require('crypto');
 const { hashPassword } = require('./auth');
 
+// Last n "YYYY-MM" month labels ending with the current month, oldest first
+// — built from local Date getters (not UTC) so "this month" always agrees
+// with the clinic's own calendar, same rule as every other date in the app.
+function lastNMonthLabels(n) {
+  const now = new Date();
+  const labels = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return labels;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -213,6 +226,29 @@ function createDb(dbPath) {
       ORDER BY n DESC, complaint
       LIMIT 5
     `),
+    monthlyVisitTrends: conn.prepare(`
+      SELECT
+        strftime('%Y-%m', visit_date) AS month,
+        COUNT(*) AS visit_count,
+        COALESCE(SUM(payment_amount), 0) AS income
+      FROM visits
+      WHERE visit_date >= date('now', 'localtime', 'start of month', '-5 months')
+      GROUP BY month
+    `),
+    newPatientsByMonth: conn.prepare(`
+      SELECT strftime('%Y-%m', created_at, 'localtime') AS month, COUNT(*) AS n
+      FROM patients
+      WHERE created_at >= datetime('now', '-6 months')
+      GROUP BY month
+    `),
+    topIllnessesLast6Months: conn.prepare(`
+      SELECT complaint, COUNT(*) AS n FROM visits
+      WHERE visit_date >= date('now', 'localtime', 'start of month', '-5 months')
+        AND complaint IS NOT NULL AND trim(complaint) != ''
+      GROUP BY complaint
+      ORDER BY n DESC, complaint
+      LIMIT 8
+    `),
     outstandingBalances: conn.prepare(`
       SELECT
         v.id AS visit_id,
@@ -397,6 +433,29 @@ function createDb(dbPath) {
 
     listOutstandingBalances() {
       return stmts.outstandingBalances.all();
+    },
+
+    // Advanced Reports & Trends (10-Month plan bonus). Every month in the
+    // window is always present, even with zero activity, so the chart
+    // never silently skips a quiet month.
+    getMonthlyVisitTrends() {
+      const rows = stmts.monthlyVisitTrends.all();
+      return lastNMonthLabels(6).map((month) => {
+        const row = rows.find((r) => r.month === month);
+        return { month, visitCount: row ? row.visit_count : 0, income: row ? row.income : 0 };
+      });
+    },
+
+    getNewPatientsByMonth() {
+      const rows = stmts.newPatientsByMonth.all();
+      return lastNMonthLabels(6).map((month) => {
+        const row = rows.find((r) => r.month === month);
+        return { month, count: row ? row.n : 0 };
+      });
+    },
+
+    getTopIllnessesLast6Months() {
+      return stmts.topIllnessesLast6Months.all();
     },
 
     getSetting(key) {

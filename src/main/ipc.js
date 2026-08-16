@@ -113,6 +113,19 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     return db.listOutstandingBalances();
   });
 
+  // ---------- Advanced Reports & Trends (10-Month plan bonus) ----------
+  handle('reports:trends', () => {
+    session.requireLogin();
+    if (db.getSetting('licensePlan') !== '10month') {
+      throw new Error('Advanced Reports & Trends is only available on the 10-Month plan.');
+    }
+    return {
+      monthlyVisits: db.getMonthlyVisitTrends(),
+      newPatientsByMonth: db.getNewPatientsByMonth(),
+      topIllnesses: db.getTopIllnessesLast6Months(),
+    };
+  });
+
   // ---------- Dispensary ----------
   handle('drugs:add', (drug) => {
     const staff = session.requireDispensaryAccess();

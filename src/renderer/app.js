@@ -91,9 +91,18 @@ const els = {
   settingsLicenseDate: document.getElementById('settings-license-date'),
   licenseSaved: document.getElementById('license-saved'),
   licenseBanner: document.getElementById('license-banner'),
-  btnPlan3mo: document.getElementById('btn-plan-3mo'),
-  btnPlan10mo: document.getElementById('btn-plan-10mo'),
+  btnPlanBuy3mo: document.getElementById('btn-plan-buy-3mo'),
+  btnPlanBuy10mo: document.getElementById('btn-plan-buy-10mo'),
+  btnPlanRenew3mo: document.getElementById('btn-plan-renew-3mo'),
+  btnPlanRenew10mo: document.getElementById('btn-plan-renew-10mo'),
   settingsClinicId: document.getElementById('settings-clinic-id'),
+
+  navTrends: document.getElementById('nav-trends'),
+  trendVisitsBars: document.getElementById('trend-visits-bars'),
+  trendIncomeBars: document.getElementById('trend-income-bars'),
+  trendPatientsBars: document.getElementById('trend-patients-bars'),
+  trendIllnessesTableBody: document.getElementById('trend-illnesses-table-body'),
+  trendIllnessesEmpty: document.getElementById('trend-illnesses-empty'),
 
   modalNewPatient: document.getElementById('modal-new-patient'),
   formNewPatient: document.getElementById('form-new-patient'),
@@ -153,13 +162,37 @@ function todayLocalDateString() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-// Same local-date rule as todayLocalDateString(), but N months from today —
-// used by the subscription plan quick-select buttons.
-function dateMonthsFromTodayString(months) {
-  const now = new Date();
-  const future = new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
+// "YYYY-MM-DD" -> local Date. Never use `new Date("YYYY-MM-DD")` directly —
+// that parses as UTC midnight and can land on the wrong local day.
+function parseLocalDateString(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatLocalDateString(date) {
   const pad = (n) => String(n).padStart(2, '0');
-  return `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function addMonthsToDate(date, months) {
+  return formatLocalDateString(new Date(date.getFullYear(), date.getMonth() + months, date.getDate()));
+}
+
+// Same local-date rule as todayLocalDateString(), but N months from today —
+// used by the subscription "New Clinic" buy buttons.
+function dateMonthsFromTodayString(months) {
+  return addMonthsToDate(new Date(), months);
+}
+
+// Used by the "Renewing Clinic" buttons: extends from whichever is later,
+// the clinic's current Licensed Until date or today — so renewing early
+// never throws away time they already paid for.
+function renewalDateString(months) {
+  const currentValue = els.settingsLicenseDate.value;
+  const base = currentValue && currentValue >= todayLocalDateString()
+    ? parseLocalDateString(currentValue)
+    : new Date();
+  return addMonthsToDate(base, months);
 }
 
 function formatMoney(amount) {
@@ -535,6 +568,59 @@ els.formNewAppointment.addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- Trends (10-Month plan bonus) ----------
+
+function monthShortLabel(yyyymm) {
+  const [y, m] = yyyymm.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short' });
+}
+
+// Renders a simple bar per item, height scaled to the largest value in the
+// set — no charting library needed for six small bars.
+function renderBarChart(container, items, valueFormatter) {
+  const maxValue = Math.max(1, ...items.map((i) => i.value));
+  container.innerHTML = '';
+  for (const item of items) {
+    const bar = document.createElement('div');
+    bar.className = 'trend-bar';
+    const heightPct = Math.max(4, Math.round((item.value / maxValue) * 100));
+    bar.innerHTML = `
+      <div class="trend-bar-value">${valueFormatter(item.value)}</div>
+      <div class="trend-bar-fill" style="height: ${heightPct}%"></div>
+      <div class="trend-bar-label">${monthShortLabel(item.month)}</div>
+    `;
+    container.appendChild(bar);
+  }
+}
+
+async function loadTrends() {
+  const trends = await window.careledger.getTrends();
+
+  renderBarChart(
+    els.trendVisitsBars,
+    trends.monthlyVisits.map((m) => ({ month: m.month, value: m.visitCount })),
+    (v) => String(v)
+  );
+  renderBarChart(
+    els.trendIncomeBars,
+    trends.monthlyVisits.map((m) => ({ month: m.month, value: m.income })),
+    (v) => formatMoney(v)
+  );
+  renderBarChart(
+    els.trendPatientsBars,
+    trends.newPatientsByMonth.map((m) => ({ month: m.month, value: m.count })),
+    (v) => String(v)
+  );
+
+  els.trendIllnessesTableBody.innerHTML = '';
+  els.trendIllnessesEmpty.hidden = trends.topIllnesses.length > 0;
+  for (const item of trends.topIllnesses) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${item.complaint}</td><td>${item.n}</td>`;
+    els.trendIllnessesTableBody.appendChild(tr);
+  }
+}
+
 // ---------- Billing ----------
 
 async function loadBilling() {
@@ -714,12 +800,29 @@ async function loadSettings() {
   if (licenseExpiresAt) els.settingsLicenseDate.value = licenseExpiresAt;
   updateLicenseBanner(licenseExpiresAt);
 
+  pendingLicensePlan = await window.careledger.getSetting('licensePlan');
+  applyPlanToUI(pendingLicensePlan);
+
   els.settingsClinicId.value = await window.careledger.getClinicId();
 }
 
-window.careledger.onLicenseUpdated((expiresAtStr) => {
-  els.settingsLicenseDate.value = expiresAtStr || '';
-  updateLicenseBanner(expiresAtStr);
+// Set by the Buy/Renew plan buttons, and written to settings when the
+// Subscription form is saved — kept separate from the form's own submit so
+// typing a custom date by hand never silently changes which plan a clinic
+// is on.
+let pendingLicensePlan = null;
+
+function applyPlanToUI(plan) {
+  els.navTrends.hidden = plan !== '10month';
+}
+
+window.careledger.onLicenseUpdated(({ expiresAt, plan }) => {
+  els.settingsLicenseDate.value = expiresAt || '';
+  updateLicenseBanner(expiresAt);
+  if (plan) {
+    pendingLicensePlan = plan;
+    applyPlanToUI(plan);
+  }
 });
 
 function daysUntil(dateStr) {
@@ -750,18 +853,32 @@ function updateLicenseBanner(expiresAtStr) {
   }
 }
 
-els.btnPlan3mo.addEventListener('click', () => {
+els.btnPlanBuy3mo.addEventListener('click', () => {
   els.settingsLicenseDate.value = dateMonthsFromTodayString(3);
+  pendingLicensePlan = '3month';
 });
 
-els.btnPlan10mo.addEventListener('click', () => {
+els.btnPlanBuy10mo.addEventListener('click', () => {
   els.settingsLicenseDate.value = dateMonthsFromTodayString(10);
+  pendingLicensePlan = '10month';
+});
+
+els.btnPlanRenew3mo.addEventListener('click', () => {
+  els.settingsLicenseDate.value = renewalDateString(3);
+  pendingLicensePlan = '3month';
+});
+
+els.btnPlanRenew10mo.addEventListener('click', () => {
+  els.settingsLicenseDate.value = renewalDateString(10);
+  pendingLicensePlan = '10month';
 });
 
 els.licenseForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const value = els.settingsLicenseDate.value;
   await window.careledger.setSetting('licenseExpiresAt', value);
+  if (pendingLicensePlan) await window.careledger.setSetting('licensePlan', pendingLicensePlan);
+  applyPlanToUI(pendingLicensePlan);
   updateLicenseBanner(value);
   els.licenseSaved.hidden = false;
   setTimeout(() => { els.licenseSaved.hidden = true; }, 1500);
@@ -936,6 +1053,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();
     if (btn.dataset.view === 'appointments') loadAppointments();
+    if (btn.dataset.view === 'trends') loadTrends();
     if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); }
   });
 });

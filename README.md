@@ -188,25 +188,48 @@ only** — nothing is locked or blocked, the clinic can keep using the app
 freely either way. It relies on PayeConnect following up directly with
 each clinic; it is not a real anti-piracy measure (the app's source and
 releases are on a public GitHub repo, so a technical user could always
-bypass or ignore the banner). If no date is set, the banner never shows.
-Two quick-select buttons — "3 Months — $70" and "10 Months — $150" —
-auto-fill the date field with today + 3 or + 10 months, matching
-PayeConnect's actual pricing plans, so setting a clinic's renewal date
-doesn't require doing the math by hand.
+bypass or ignore the banner). If no date is set, the banner never shows. PayeConnect's actual pricing
+has two separate button groups on the Subscription screen:
+- **New Clinic (First Purchase)** — 3 Months for $70, or 10 Months for
+  $150. Fills the date field with today + 3/10 months.
+- **Renewing Clinic** — 3 Months for $20, or 10 Months for $40 (cheaper,
+  since it's not new setup). Extends from whichever is later — the
+  clinic's current Licensed Until date, or today — so renewing a few days
+  early never throws away time they already paid for.
+
+Both button groups just fill in the date (and remember which plan was
+picked); nothing is saved until "Save" is clicked, same as before.
 
 **Remote subscription renewal** (fetched from `licenses.json` on the
 `master` branch of this repo). Every installed copy of CareLedger gets
 its own random **Clinic ID** the first time it runs (shown, read-only, on
 **Settings → Subscription**). When a clinic renews, PayeConnect adds or
 updates that Clinic ID's entry in `licenses.json` (a small file kept in
-this same GitHub repo) with the new expiry date and pushes it. Every
-running copy of the app quietly checks that file shortly after it starts,
-and again every 6 hours — if it finds its own Clinic ID with a new date,
-it adopts it automatically and the banner updates immediately, with no
-action needed on the clinic's computer at all (as long as that computer
-has internet at some point). If a clinic is offline, has no internet, or
-isn't listed in the file yet, nothing happens — the app just keeps using
-whatever date was last set locally, same as before this feature existed.
+this same GitHub repo) — `{"expiresAt": "YYYY-MM-DD", "plan": "10month"}`
+(the `plan` field is optional; omit it to update just the date) — and
+pushes it. Every running copy of the app quietly checks that file shortly
+after it starts, and again every 6 hours — if it finds its own Clinic ID
+with a new date or plan, it adopts it automatically and the banner (and
+Trends tab, see below) update immediately, with no action needed on the
+clinic's computer at all (as long as that computer has internet at some
+point). If a clinic is offline, has no internet, or isn't listed in the
+file yet, nothing happens — the app just keeps using whatever was last
+set locally, same as before this feature existed.
+
+**Advanced Reports & Trends (10-Month plan bonus)** — clinics on the
+10-Month plan (either the $150 first purchase or a $40 renewal) get an
+extra **Trends** tab: simple bar charts of patient visits and income over
+the last 6 months, new patients registered per month, and a table of the
+most common complaints over that window. Everything is computed from data
+already in the app — no new dependency, works fully offline, costs
+nothing to run. It's deliberately a nice-to-have, not something a clinic
+needs to run day-to-day — nothing on the cheaper 3-Month plan was removed
+or weakened to make room for it. Which plan a clinic is on is tracked as
+a `licensePlan` setting (`"3month"` or `"10month"`), set by whichever
+button was clicked (or by the `plan` field in a remote renewal); the Main
+process checks this before returning any Trends data, so hiding the tab
+in the UI isn't the only thing stopping a non-10-Month clinic from seeing
+it.
 This is a convenience, not a security feature: `licenses.json` lives in
 the same **public** repo as the rest of the code, so it's not a place to
 put anything sensitive, and a technical user could still edit their own

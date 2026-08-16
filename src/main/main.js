@@ -50,11 +50,21 @@ async function performLicenseSync() {
     const clinicId = db.getOrCreateClinicId();
     const remote = await checkRemoteLicense(clinicId);
     if (!remote) return; // offline, file missing, or this clinic not listed — nothing to do
-    if (remote.expiresAt === db.getSetting('licenseExpiresAt')) return; // already up to date
+
+    const currentExpiresAt = db.getSetting('licenseExpiresAt');
+    const currentPlan = db.getSetting('licensePlan');
+    const expiresAtChanged = remote.expiresAt !== currentExpiresAt;
+    const planChanged = Boolean(remote.plan) && remote.plan !== currentPlan;
+    if (!expiresAtChanged && !planChanged) return; // already up to date
 
     db.setSetting('licenseExpiresAt', remote.expiresAt);
+    if (remote.plan) db.setSetting('licensePlan', remote.plan);
+
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('license:updated', remote.expiresAt);
+      mainWindow.webContents.send('license:updated', {
+        expiresAt: remote.expiresAt,
+        plan: remote.plan || currentPlan || null,
+      });
     }
   } catch (err) {
     // Same rule as backups and updates: a remote-license hiccup must never

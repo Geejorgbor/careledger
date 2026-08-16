@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('careledger', {
   pickClinicLogo: () => unwrap(ipcRenderer.invoke('settings:pickLogo')),
   getClinicId: () => unwrap(ipcRenderer.invoke('settings:getClinicId')),
   onLicenseUpdated: (callback) => {
-    ipcRenderer.on('license:updated', (_event, expiresAt) => callback(expiresAt));
+    ipcRenderer.on('license:updated', (_event, data) => callback(data));
   },
+  getTrends: () => unwrap(ipcRenderer.invoke('reports:trends')),
 });

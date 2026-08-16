@@ -24,7 +24,9 @@ function parseLicenseEntry(jsonText, clinicId) {
   }
   const entry = data && typeof data === 'object' ? data[clinicId] : null;
   if (!entry || typeof entry.expiresAt !== 'string') return null;
-  return { expiresAt: entry.expiresAt };
+  const result = { expiresAt: entry.expiresAt };
+  if (entry.plan === '3month' || entry.plan === '10month') result.plan = entry.plan;
+  return result;
 }
 
 async function checkRemoteLicense(clinicId) {

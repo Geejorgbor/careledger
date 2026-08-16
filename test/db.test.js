@@ -598,6 +598,38 @@ async function run() {
   const match = parseLicenseEntry('{"abc": {"expiresAt": "2027-01-15", "clinicName": "Test Clinic"}}', 'abc');
   assert.deepStrictEqual(match, { expiresAt: '2027-01-15' });
 
+  const matchWithPlan = parseLicenseEntry('{"abc": {"expiresAt": "2027-01-15", "plan": "10month"}}', 'abc');
+  assert.deepStrictEqual(matchWithPlan, { expiresAt: '2027-01-15', plan: '10month' });
+
+  const matchWithBadPlan = parseLicenseEntry('{"abc": {"expiresAt": "2027-01-15", "plan": "lifetime"}}', 'abc');
+  assert.deepStrictEqual(matchWithBadPlan, { expiresAt: '2027-01-15' }, 'an unrecognized plan value should be dropped, not trusted blindly');
+
+  // Advanced Reports & Trends (10-Month plan bonus) — db-level aggregation
+  const db10 = createDb(':memory:');
+  const trendsStaff = db10.addStaff({ name: 'Trends Nurse', role: 'Nurse', username: 'trendsnurse', password: 'pw' });
+  const trendsPatientA = db10.addPatient({ firstName: 'Trend', lastName: 'PatientA' });
+  const trendsPatientB = db10.addPatient({ firstName: 'Trend', lastName: 'PatientB' });
+  db10.addVisit({ patientId: trendsPatientA.id, visitDate: today, complaint: 'Malaria', paymentAmount: 15, createdByStaffId: trendsStaff.id });
+  db10.addVisit({ patientId: trendsPatientB.id, visitDate: today, complaint: 'Malaria', paymentAmount: 25, createdByStaffId: trendsStaff.id });
+  db10.addVisit({ patientId: trendsPatientA.id, visitDate: today, complaint: 'Typhoid', paymentAmount: 10, createdByStaffId: trendsStaff.id });
+
+  const monthlyVisits = db10.getMonthlyVisitTrends();
+  assert.strictEqual(monthlyVisits.length, 6, 'trend window should always be exactly 6 months, even the quiet ones');
+  const currentMonthTrend = monthlyVisits[monthlyVisits.length - 1];
+  assert.strictEqual(currentMonthTrend.month, today.slice(0, 7), 'the last bucket should be the current month');
+  assert.strictEqual(currentMonthTrend.visitCount, 3);
+  assert.strictEqual(currentMonthTrend.income, 50);
+  assert.strictEqual(monthlyVisits[0].visitCount, 0, 'a month with no visits should show as zero, not be skipped');
+
+  const newPatients = db10.getNewPatientsByMonth();
+  assert.strictEqual(newPatients.length, 6);
+  assert.strictEqual(newPatients[newPatients.length - 1].count, 2, 'both patients were registered this month');
+
+  const topIllnesses = db10.getTopIllnessesLast6Months();
+  assert.strictEqual(topIllnesses[0].complaint, 'Malaria');
+  assert.strictEqual(topIllnesses[0].n, 2);
+  db10.close();
+
   console.log('All db.js tests passed.');
 }
 
