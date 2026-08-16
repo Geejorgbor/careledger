@@ -308,6 +308,12 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
 }
 #settings-form label, #license-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
 
+.plan-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
 #license-banner {
   padding: 10px 24px;
   font-size: 13px;

@@ -91,6 +91,8 @@ const els = {
   settingsLicenseDate: document.getElementById('settings-license-date'),
   licenseSaved: document.getElementById('license-saved'),
   licenseBanner: document.getElementById('license-banner'),
+  btnPlan3mo: document.getElementById('btn-plan-3mo'),
+  btnPlan10mo: document.getElementById('btn-plan-10mo'),
 
   modalNewPatient: document.getElementById('modal-new-patient'),
   formNewPatient: document.getElementById('form-new-patient'),
@@ -148,6 +150,15 @@ function todayLocalDateString() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+// Same local-date rule as todayLocalDateString(), but N months from today —
+// used by the subscription plan quick-select buttons.
+function dateMonthsFromTodayString(months) {
+  const now = new Date();
+  const future = new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}`;
 }
 
 function formatMoney(amount) {
@@ -730,6 +741,14 @@ function updateLicenseBanner(expiresAtStr) {
     els.licenseBanner.hidden = true;
   }
 }
+
+els.btnPlan3mo.addEventListener('click', () => {
+  els.settingsLicenseDate.value = dateMonthsFromTodayString(3);
+});
+
+els.btnPlan10mo.addEventListener('click', () => {
+  els.settingsLicenseDate.value = dateMonthsFromTodayString(10);
+});
 
 els.licenseForm.addEventListener('submit', async (e) => {
   e.preventDefault();
