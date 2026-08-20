@@ -645,6 +645,55 @@ async function run() {
   assert.ok(/not a human/i.test(prompt) || /not a real person/i.test(prompt), 'system prompt must rule out claiming to be human');
   assert.ok(prompt.includes('"patientsSeenToday": 3'), 'system prompt should include the live data snapshot');
 
+  // Subscription clients & refill reminders
+  const db11 = createDb(':memory:');
+  const subStaff = db11.addStaff({ name: 'Sub Staff', role: 'Front Desk', username: 'substaff', password: 'pw' });
+  const dateOffset = (days) => localDateString(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
+
+  const clientA = db11.addSubscriptionClient({ name: 'Client Due Soon', phone: '0770000001', sponsor: 'Self', createdByStaffId: subStaff.id });
+  const clientB = db11.addSubscriptionClient({ name: 'Client Overdue', phone: '0770000002', createdByStaffId: subStaff.id });
+  const clientC = db11.addSubscriptionClient({ name: 'Client Not Due Yet', phone: '0770000003', createdByStaffId: subStaff.id });
+  const clientD = db11.addSubscriptionClient({ name: 'Client Inactive', phone: '0770000004', createdByStaffId: subStaff.id });
+  db11.setSubscriptionClientStatus(clientD.id, 'Inactive');
+
+  // Client A: an older, superseded order for the same medication, then the real latest one — due in 3 days
+  db11.addSubscriptionHistory({ clientId: clientA.id, entryDate: dateOffset(-60), entryType: 'Order', medication: 'Metformin', daySupply: 30, createdByStaffId: subStaff.id });
+  db11.addSubscriptionHistory({ clientId: clientA.id, entryDate: dateOffset(-27), entryType: 'Order', medication: 'Metformin', daySupply: 30, createdByStaffId: subStaff.id });
+  // Overdue by 10 days
+  db11.addSubscriptionHistory({ clientId: clientB.id, entryDate: dateOffset(-40), entryType: 'Order', medication: 'Lisinopril', daySupply: 30, createdByStaffId: subStaff.id });
+  // Not due for 25 more days
+  db11.addSubscriptionHistory({ clientId: clientC.id, entryDate: dateOffset(-5), entryType: 'Order', medication: 'Omeprazole', daySupply: 30, createdByStaffId: subStaff.id });
+  // Inactive client, otherwise due today — must not appear
+  db11.addSubscriptionHistory({ clientId: clientD.id, entryDate: dateOffset(-30), entryType: 'Order', medication: 'Vitamin D', daySupply: 30, createdByStaffId: subStaff.id });
+  // A Note entry (no day supply) must never be treated as a refillable order
+  db11.addSubscriptionHistory({ clientId: clientA.id, entryDate: dateOffset(-1), entryType: 'Note', note: 'Called, doing fine.', createdByStaffId: subStaff.id });
+
+  const dueWithin7 = db11.getRefillsDue(7);
+  const dueNames = dueWithin7.map((r) => r.client_name).sort();
+  assert.deepStrictEqual(dueNames, ['Client Due Soon', 'Client Overdue'], 'only the due-soon and overdue active clients should show up in a 7-day window');
+
+  const dueSoonRow = dueWithin7.find((r) => r.client_name === 'Client Due Soon');
+  assert.strictEqual(dueSoonRow.medication, 'Metformin');
+  assert.strictEqual(dueSoonRow.days_until_due, 3, 'should use the latest (not the superseded) order for the due-date math');
+
+  const overdueRow = dueWithin7.find((r) => r.client_name === 'Client Overdue');
+  assert.strictEqual(overdueRow.days_until_due, -10, 'an overdue refill should show a negative days_until_due, not be excluded');
+
+  const dueWithin2 = db11.getRefillsDue(2);
+  assert.strictEqual(dueWithin2.some((r) => r.client_name === 'Client Due Soon'), false, 'a 2-day window should exclude a refill due in 3 days');
+
+  // Marking a reminder as sent removes it from future due lists for that order
+  db11.markRefillReminderSent(dueSoonRow.id, new Date().toISOString());
+  const dueAfterReminder = db11.getRefillsDue(7);
+  assert.strictEqual(dueAfterReminder.some((r) => r.client_name === 'Client Due Soon'), false, 'a client already reminded for this order should not be reminded again');
+  assert.strictEqual(dueAfterReminder.some((r) => r.client_name === 'Client Overdue'), true, 'other still-unreminded due clients should be unaffected');
+
+  const historyForA = db11.getSubscriptionHistoryForClient(clientA.id);
+  assert.strictEqual(historyForA.length, 3, 'client A should have all 3 of their history entries (2 orders + 1 note)');
+  assert.strictEqual(historyForA[0].recorded_by_name, 'Sub Staff', 'history should be attributed to the staff member who logged it');
+
+  db11.close();
+
   console.log('All db.js tests passed.');
 }
 

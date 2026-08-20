@@ -83,6 +83,24 @@ const els = {
   btnNewVisit: document.getElementById('btn-new-visit'),
   btnBackToPatients: document.getElementById('btn-back-to-patients'),
 
+  subscriptionSearch: document.getElementById('subscription-search'),
+  subscriptionsTableBody: document.getElementById('subscriptions-table-body'),
+  subscriptionsEmpty: document.getElementById('subscriptions-empty'),
+  btnNewSubscriptionClient: document.getElementById('btn-new-subscription-client'),
+  detailSubscriptionName: document.getElementById('detail-subscription-name'),
+  detailSubscriptionMeta: document.getElementById('detail-subscription-meta'),
+  btnToggleSubscriptionStatus: document.getElementById('btn-toggle-subscription-status'),
+  subscriptionHistoryTableBody: document.getElementById('subscription-history-table-body'),
+  subscriptionHistoryEmpty: document.getElementById('subscription-history-empty'),
+  btnNewSubscriptionHistory: document.getElementById('btn-new-subscription-history'),
+  btnBackToSubscriptions: document.getElementById('btn-back-to-subscriptions'),
+  modalNewSubscriptionClient: document.getElementById('modal-new-subscription-client'),
+  formNewSubscriptionClient: document.getElementById('form-new-subscription-client'),
+  modalNewSubscriptionHistory: document.getElementById('modal-new-subscription-history'),
+  formNewSubscriptionHistory: document.getElementById('form-new-subscription-history'),
+  subscriptionHistoryType: document.getElementById('subscription-history-type'),
+  subscriptionHistoryOrderFields: document.getElementById('subscription-history-order-fields'),
+
   settingsForm: document.getElementById('settings-form'),
   settingsClinicName: document.getElementById('settings-clinic-name'),
   settingsSaved: document.getElementById('settings-saved'),
@@ -583,6 +601,121 @@ els.formNewAppointment.addEventListener('submit', async (e) => {
     await loadPatientAppointments();
   } catch (err) {
     alert(`Could not save appointment: ${err.message}`);
+  }
+});
+
+// ---------- Subscriptions (retail refill-plan clients) ----------
+
+let currentSubscriptionClientId = null;
+
+async function loadSubscriptions() {
+  showLoadingRow(els.subscriptionsTableBody, 4);
+  const clients = await window.careledger.listSubscriptionClients(els.subscriptionSearch.value);
+  els.subscriptionsTableBody.innerHTML = '';
+  els.subscriptionsEmpty.hidden = clients.length > 0;
+  for (const c of clients) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${c.name}</td>
+      <td>${c.phone || ''}</td>
+      <td>${c.sponsor || ''}</td>
+      <td><span class="${c.status === 'Active' ? 'status-active' : 'status-inactive'}">${c.status}</span></td>
+    `;
+    tr.addEventListener('click', () => openSubscriptionDetail(c.id));
+    els.subscriptionsTableBody.appendChild(tr);
+  }
+}
+
+els.subscriptionSearch.addEventListener('input', () => loadSubscriptions());
+els.btnNewSubscriptionClient.addEventListener('click', () => els.modalNewSubscriptionClient.showModal());
+
+els.formNewSubscriptionClient.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formNewSubscriptionClient));
+  try {
+    await window.careledger.addSubscriptionClient(data);
+    els.modalNewSubscriptionClient.close();
+    els.formNewSubscriptionClient.reset();
+    await loadSubscriptions();
+  } catch (err) {
+    alert(`Could not save client: ${err.message}`);
+  }
+});
+
+let currentSubscriptionClient = null;
+
+async function openSubscriptionDetail(clientId) {
+  currentSubscriptionClientId = clientId;
+  const client = await window.careledger.getSubscriptionClient(clientId);
+  currentSubscriptionClient = client;
+  els.detailSubscriptionName.textContent = client.name;
+  const metaParts = [];
+  if (client.phone) metaParts.push(client.phone);
+  if (client.sponsor) metaParts.push(`Sponsor: ${client.sponsor}`);
+  metaParts.push(client.status);
+  els.detailSubscriptionMeta.textContent = metaParts.join(' · ');
+  els.btnToggleSubscriptionStatus.textContent = client.status === 'Active' ? 'Mark Inactive' : 'Mark Active';
+
+  switchView('subscription-detail');
+  await loadSubscriptionHistory();
+}
+
+async function loadSubscriptionHistory() {
+  showLoadingRow(els.subscriptionHistoryTableBody, 6);
+  const history = await window.careledger.getSubscriptionHistoryForClient(currentSubscriptionClientId);
+  els.subscriptionHistoryTableBody.innerHTML = '';
+  els.subscriptionHistoryEmpty.hidden = history.length > 0;
+  for (const h of history) {
+    const tr = document.createElement('tr');
+    const medication = h.medication ? `${h.medication}${h.quantity ? ` (${h.quantity})` : ''}` : '';
+    tr.innerHTML = `
+      <td>${formatDate(h.entry_date)}</td>
+      <td>${h.entry_type}</td>
+      <td>${medication}</td>
+      <td>${h.day_supply ? `${h.day_supply} days` : ''}</td>
+      <td>${h.note || ''}</td>
+      <td>${h.recorded_by_name || ''}</td>
+    `;
+    els.subscriptionHistoryTableBody.appendChild(tr);
+  }
+}
+
+els.btnBackToSubscriptions.addEventListener('click', () => {
+  currentSubscriptionClientId = null;
+  currentSubscriptionClient = null;
+  switchView('subscriptions');
+  loadSubscriptions();
+});
+
+els.btnToggleSubscriptionStatus.addEventListener('click', async () => {
+  const newStatus = currentSubscriptionClient.status === 'Active' ? 'Inactive' : 'Active';
+  await window.careledger.setSubscriptionClientStatus(currentSubscriptionClientId, newStatus);
+  await openSubscriptionDetail(currentSubscriptionClientId);
+});
+
+els.btnNewSubscriptionHistory.addEventListener('click', () => {
+  const dateInput = els.formNewSubscriptionHistory.elements['entryDate'];
+  if (!dateInput.value) dateInput.value = todayLocalDateString();
+  els.subscriptionHistoryType.value = 'Order';
+  els.subscriptionHistoryOrderFields.hidden = false;
+  els.modalNewSubscriptionHistory.showModal();
+});
+
+els.subscriptionHistoryType.addEventListener('change', () => {
+  els.subscriptionHistoryOrderFields.hidden = els.subscriptionHistoryType.value !== 'Order';
+});
+
+els.formNewSubscriptionHistory.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(els.formNewSubscriptionHistory));
+  data.clientId = currentSubscriptionClientId;
+  try {
+    await window.careledger.addSubscriptionHistory(data);
+    els.modalNewSubscriptionHistory.close();
+    els.formNewSubscriptionHistory.reset();
+    await loadSubscriptionHistory();
+  } catch (err) {
+    alert(`Could not save entry: ${err.message}`);
   }
 });
 
@@ -1131,6 +1264,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'billing') loadBilling();
     if (btn.dataset.view === 'dispensary') loadDrugs();
     if (btn.dataset.view === 'appointments') loadAppointments();
+    if (btn.dataset.view === 'subscriptions') loadSubscriptions();
     if (btn.dataset.view === 'trends') loadTrends();
     if (btn.dataset.view === 'assistant') loadAssistantSettings();
     if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); loadAssistantSettings(); }

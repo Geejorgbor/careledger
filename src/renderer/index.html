@@ -53,6 +53,7 @@
           <button data-view="billing" class="nav-btn">Billing</button>
           <button data-view="dispensary" class="nav-btn">Dispensary</button>
           <button data-view="appointments" class="nav-btn">Appointments</button>
+          <button data-view="subscriptions" class="nav-btn">Subscriptions</button>
           <button data-view="trends" class="nav-btn" id="nav-trends" hidden>Trends</button>
           <button data-view="assistant" class="nav-btn" id="nav-assistant" hidden>Assistant</button>
           <button data-view="settings" class="nav-btn">Settings</button>
@@ -186,6 +187,57 @@
           <tbody id="patient-appointments-table-body"></tbody>
         </table>
         <p id="patient-appointments-empty" class="empty-state" hidden>No appointments scheduled for this patient.</p>
+      </section>
+
+      <!-- SUBSCRIPTIONS LIST VIEW -->
+      <section id="view-subscriptions" class="view">
+        <div class="toolbar">
+          <input id="subscription-search" type="text" placeholder="Search by name or phone..." />
+          <button id="btn-new-subscription-client" class="primary">+ New Client</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>Sponsor</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="subscriptions-table-body"></tbody>
+        </table>
+        <p id="subscriptions-empty" class="empty-state" hidden>No subscription clients yet. Click "+ New Client" to add one.</p>
+      </section>
+
+      <!-- SUBSCRIPTION CLIENT DETAIL VIEW -->
+      <section id="view-subscription-detail" class="view">
+        <button id="btn-back-to-subscriptions" class="link-btn">&larr; Back to Subscriptions</button>
+        <div class="patient-header">
+          <h2 id="detail-subscription-name"></h2>
+          <div id="detail-subscription-meta"></div>
+        </div>
+
+        <div class="toolbar">
+          <h3>History</h3>
+          <div>
+            <button id="btn-toggle-subscription-status" class="secondary"></button>
+            <button id="btn-new-subscription-history" class="primary">+ Add Entry</button>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Medication</th>
+              <th>Day Supply</th>
+              <th>Note</th>
+              <th>Recorded By</th>
+            </tr>
+          </thead>
+          <tbody id="subscription-history-table-body"></tbody>
+        </table>
+        <p id="subscription-history-empty" class="empty-state" hidden>No history yet for this client.</p>
       </section>
 
       <!-- BILLING VIEW -->
@@ -504,6 +556,47 @@
       <div class="modal-actions">
         <button type="button" class="cancel-btn" data-close="modal-new-visit">Cancel</button>
         <button type="submit" class="primary">Save Visit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- NEW SUBSCRIPTION CLIENT MODAL -->
+  <dialog id="modal-new-subscription-client">
+    <form id="form-new-subscription-client">
+      <h2>New Subscription Client</h2>
+      <label>Name <input name="name" required /></label>
+      <label>Phone <input name="phone" /></label>
+      <label>Sponsor <input name="sponsor" placeholder="e.g. Self, or who's paying" /></label>
+      <label>Sponsor Contact <input name="sponsorContact" /></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-new-subscription-client">Cancel</button>
+        <button type="submit" class="primary">Save Client</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- NEW SUBSCRIPTION HISTORY ENTRY MODAL -->
+  <dialog id="modal-new-subscription-history">
+    <form id="form-new-subscription-history">
+      <h2>Add History Entry</h2>
+      <label>Date <input name="entryDate" type="date" required /></label>
+      <label>Type
+        <select name="entryType" id="subscription-history-type">
+          <option value="Order">Order (medication refill)</option>
+          <option value="Note">Note (call / clinical note)</option>
+          <option value="Contact">Contact (attempted, no details)</option>
+        </select>
+      </label>
+      <div id="subscription-history-order-fields">
+        <label>Medication <input name="medication" /></label>
+        <label>Indication <input name="indication" /></label>
+        <label>Quantity <input name="quantity" placeholder="e.g. 30 tablets" /></label>
+        <label>Day Supply <input name="daySupply" type="number" step="1" min="1" placeholder="e.g. 30" /></label>
+      </div>
+      <label>Note <textarea name="note" rows="3"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" data-close="modal-new-subscription-history">Cancel</button>
+        <button type="submit" class="primary">Save Entry</button>
       </div>
     </form>
   </dialog>

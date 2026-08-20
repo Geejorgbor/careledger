@@ -258,6 +258,31 @@ it something (unlike the rest of the app) and a real, paid API key —
 CareLedger has no AI account of its own, so this only works once one has
 been added in Settings.
 
+**Subscriptions (retail refill-plan clients) — in progress.** A new
+**Subscriptions** tab, separate from clinical Patients, for tracking
+retail/subscription customers (e.g. a pharmacy's refill plan): add a
+client (name, phone, who's sponsoring them), and log dated history
+entries under them — an **Order** (medication, quantity, day supply), a
+**Note** (a call/clinical note), or a plain **Contact** attempt. This is
+deliberately a separate concept from Patients/Visits — a retail refill
+customer isn't a clinical visit, so it doesn't carry vitals, billing, or
+appointments.
+
+The refill math lives in `db.js`'s `getRefillsDue(windowDays)`: for every
+client's medication, only the **most recent** Order entry counts (an
+older order for the same medication is superseded automatically); its
+due date is that order's date + its day supply, and a client already
+reminded for a given order is never returned again until they log a new
+order. Built and tested (`test/db.test.js`), but **the daily automatic
+check + actual SMS sending is not built yet** — right now this only
+tracks the data and computes who's due; nothing texts anyone yet. That
+part is planned to live on a small always-on service PayeConnect (not
+any individual clinic) hosts and every CareLedger install can check in
+with — same shape as the update-check/license-sync pattern already in
+`main.js`, extended further — so it works the same way whether it's
+Ducor or any future clinic using CareLedger, and doesn't depend on any
+one clinic's own website or a single computer being turned on.
+
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
 receipts, role-based permissions, vital signs, appointment scheduling,

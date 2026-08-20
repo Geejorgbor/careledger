@@ -17,6 +17,40 @@ function lastNMonthLabels(n) {
   return labels;
 }
 
+// entryDate is a "YYYY-MM-DD" string (SQLite/app convention). Adds
+// daySupply days to it using local-date arithmetic — never a UTC parse —
+// same rule as every other date computation in this app.
+function addDaysToDateString(entryDate, days) {
+  const [y, m, d] = entryDate.split('-').map(Number);
+  const due = new Date(y, m - 1, d + days);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}`;
+}
+
+function daysBetweenDateStrings(fromDateStr, toDateStr) {
+  const [fy, fm, fd] = fromDateStr.split('-').map(Number);
+  const [ty, tm, td] = toDateStr.split('-').map(Number);
+  const from = new Date(fy, fm - 1, fd);
+  const to = new Date(ty, tm - 1, td);
+  return Math.round((to - from) / (24 * 60 * 60 * 1000));
+}
+
+// Given rows already ordered by (client_id, medication, entry_date DESC),
+// keeps only the first (i.e. most recent) row per (client, medication) —
+// an older order for the same medication is superseded the moment a newer
+// one is logged.
+function keepLatestPerClientMedication(rows) {
+  const seen = new Set();
+  const latest = [];
+  for (const row of rows) {
+    const key = `${row.client_id}::${row.medication}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    latest.push(row);
+  }
+  return latest;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -97,12 +131,51 @@ CREATE TABLE IF NOT EXISTS appointments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- A "client" here is a retail/subscription customer (e.g. a pharmacy's
+-- refill-plan subscribers) — a separate concept from a clinical "patient"
+-- above, even though the shape is similar (one record, a dated history
+-- underneath it), because the fields and purpose genuinely differ: no
+-- vitals/appointments/billing-per-visit, but a sponsor (who's paying) and
+-- medications with a day-supply the refill reminder math runs on.
+CREATE TABLE IF NOT EXISTS subscription_clients (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT,
+  sponsor TEXT,
+  sponsor_contact TEXT,
+  status TEXT NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive')),
+  created_by_staff_id INTEGER REFERENCES staff(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- One row per thing that happened with a client: a medication order (has
+-- medication/quantity/day_supply, used for the refill-due calculation), a
+-- clinical/call note, or a plain contact attempt. reminder_sent_at is set
+-- when a refill reminder has gone out for that specific order, so the
+-- same order is never reminded twice.
+CREATE TABLE IF NOT EXISTS subscription_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id INTEGER NOT NULL REFERENCES subscription_clients(id),
+  entry_date TEXT NOT NULL,
+  entry_type TEXT NOT NULL CHECK (entry_type IN ('Order', 'Note', 'Contact')),
+  medication TEXT,
+  indication TEXT,
+  quantity TEXT,
+  day_supply INTEGER,
+  note TEXT,
+  reminder_sent_at TEXT,
+  created_by_staff_id INTEGER REFERENCES staff(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_visits_patient_id ON visits(patient_id);
 CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(last_name, first_name);
 CREATE INDEX IF NOT EXISTS idx_drug_movements_drug_id ON drug_movements(drug_id);
 CREATE INDEX IF NOT EXISTS idx_drugs_name ON drugs(name);
 CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
+CREATE INDEX IF NOT EXISTS idx_subscription_history_client_id ON subscription_history(client_id);
+CREATE INDEX IF NOT EXISTS idx_subscription_clients_name ON subscription_clients(name);
 `;
 
 /**
@@ -192,6 +265,46 @@ function createDb(dbPath) {
       JOIN patients p ON p.id = v.patient_id
       LEFT JOIN staff s ON s.id = v.created_by_staff_id
       ORDER BY v.visit_date, v.id
+    `),
+    insertSubscriptionClient: conn.prepare(`
+      INSERT INTO subscription_clients (name, phone, sponsor, sponsor_contact, created_by_staff_id)
+      VALUES (@name, @phone, @sponsor, @sponsorContact, @createdByStaffId)
+    `),
+    getSubscriptionClientById: conn.prepare(`SELECT * FROM subscription_clients WHERE id = ?`),
+    searchSubscriptionClients: conn.prepare(`
+      SELECT * FROM subscription_clients
+      WHERE name LIKE @term OR phone LIKE @term
+      ORDER BY name
+      LIMIT 200
+    `),
+    listSubscriptionClients: conn.prepare(`
+      SELECT * FROM subscription_clients ORDER BY name LIMIT 200
+    `),
+    setSubscriptionClientStatus: conn.prepare(`
+      UPDATE subscription_clients SET status = @status WHERE id = @id
+    `),
+    insertSubscriptionHistory: conn.prepare(`
+      INSERT INTO subscription_history (client_id, entry_date, entry_type, medication, indication, quantity, day_supply, note, created_by_staff_id)
+      VALUES (@clientId, @entryDate, @entryType, @medication, @indication, @quantity, @daySupply, @note, @createdByStaffId)
+    `),
+    getSubscriptionHistoryForClient: conn.prepare(`
+      SELECT h.*, s.name AS recorded_by_name
+      FROM subscription_history h
+      LEFT JOIN staff s ON s.id = h.created_by_staff_id
+      WHERE h.client_id = ?
+      ORDER BY h.entry_date DESC, h.id DESC
+    `),
+    // Every Order-type entry with a real date and day supply, across all
+    // clients — the raw material the refill-due calculation runs on.
+    listRefillableOrders: conn.prepare(`
+      SELECT h.*, c.name AS client_name, c.phone AS client_phone, c.status AS client_status
+      FROM subscription_history h
+      JOIN subscription_clients c ON c.id = h.client_id
+      WHERE h.entry_type = 'Order' AND h.day_supply IS NOT NULL
+      ORDER BY h.client_id, h.medication, h.entry_date DESC
+    `),
+    markReminderSent: conn.prepare(`
+      UPDATE subscription_history SET reminder_sent_at = @sentAt WHERE id = @id
     `),
     getSetting: conn.prepare(`SELECT value FROM settings WHERE key = ?`),
     setSetting: conn.prepare(`
@@ -655,6 +768,93 @@ function createDb(dbPath) {
 
     setStaffActive(id, active) {
       stmts.setStaffActive.run({ id, active: active ? 1 : 0 });
+    },
+
+    // ---------- Subscription clients (retail refill-plan customers) ----------
+
+    addSubscriptionClient({ name, phone, sponsor, sponsorContact, createdByStaffId }) {
+      requireNonEmpty(name, 'name');
+      const info = stmts.insertSubscriptionClient.run({
+        name: name.trim(),
+        phone: phone || null,
+        sponsor: sponsor || null,
+        sponsorContact: sponsorContact || null,
+        createdByStaffId: createdByStaffId || null,
+      });
+      return stmts.getSubscriptionClientById.get(info.lastInsertRowid);
+    },
+
+    getSubscriptionClient(id) {
+      return stmts.getSubscriptionClientById.get(id);
+    },
+
+    listSubscriptionClients(searchTerm) {
+      if (searchTerm && searchTerm.trim()) {
+        return stmts.searchSubscriptionClients.all({ term: `%${searchTerm.trim()}%` });
+      }
+      return stmts.listSubscriptionClients.all();
+    },
+
+    setSubscriptionClientStatus(id, status) {
+      if (status !== 'Active' && status !== 'Inactive') {
+        throw new Error('status must be Active or Inactive');
+      }
+      stmts.setSubscriptionClientStatus.run({ id, status });
+    },
+
+    addSubscriptionHistory({ clientId, entryDate, entryType, medication, indication, quantity, daySupply, note, createdByStaffId }) {
+      if (!stmts.getSubscriptionClientById.get(clientId)) {
+        throw new Error('Client not found');
+      }
+      requireNonEmpty(entryDate, 'entryDate');
+      if (!['Order', 'Note', 'Contact'].includes(entryType)) {
+        throw new Error('entryType must be Order, Note, or Contact');
+      }
+      const info = stmts.insertSubscriptionHistory.run({
+        clientId,
+        entryDate,
+        entryType,
+        medication: medication || null,
+        indication: indication || null,
+        quantity: quantity || null,
+        daySupply: daySupply != null && daySupply !== '' ? Number(daySupply) : null,
+        note: note || null,
+        createdByStaffId: createdByStaffId || null,
+      });
+      return info.lastInsertRowid;
+    },
+
+    getSubscriptionHistoryForClient(clientId) {
+      return stmts.getSubscriptionHistoryForClient.all(clientId);
+    },
+
+    // For every (client, medication) pair, the most recent Order entry that
+    // has a day supply — that single row is what "next refill due" is
+    // computed from.
+    getLatestOrderPerMedication() {
+      return keepLatestPerClientMedication(stmts.listRefillableOrders.all());
+    },
+
+    markRefillReminderSent(historyId, sentAtIso) {
+      stmts.markReminderSent.run({ id: historyId, sentAt: sentAtIso });
+    },
+
+    // Active clients whose most recent order of some medication is due
+    // (or overdue) within `windowDays`, and hasn't already had a reminder
+    // sent for that specific order. This is the exact list the daily
+    // reminder job sends texts to.
+    getRefillsDue(windowDays) {
+      const pad = (n) => String(n).padStart(2, '0');
+      const now = new Date();
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      return keepLatestPerClientMedication(stmts.listRefillableOrders.all())
+        .filter((row) => row.client_status === 'Active' && !row.reminder_sent_at)
+        .map((row) => {
+          const dueDate = addDaysToDateString(row.entry_date, row.day_supply);
+          return { ...row, due_date: dueDate, days_until_due: daysBetweenDateStrings(today, dueDate) };
+        })
+        .filter((row) => row.days_until_due <= windowDays);
     },
 
     // Uses SQLite's own online backup API (via better-sqlite3) rather than

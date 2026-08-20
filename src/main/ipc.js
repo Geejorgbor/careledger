@@ -81,6 +81,36 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     return db.getVisitsForPatient(patientId);
   });
 
+  // ---------- Subscription clients (retail refill-plan customers) ----------
+  handle('subscriptions:add', (client) => {
+    const staff = session.requireLogin();
+    return db.addSubscriptionClient({ ...client, createdByStaffId: staff.id });
+  });
+  handle('subscriptions:list', (searchTerm) => {
+    session.requireLogin();
+    return db.listSubscriptionClients(searchTerm);
+  });
+  handle('subscriptions:get', (id) => {
+    session.requireLogin();
+    return db.getSubscriptionClient(id);
+  });
+  handle('subscriptions:setStatus', (id, status) => {
+    session.requireLogin();
+    return db.setSubscriptionClientStatus(id, status);
+  });
+  handle('subscriptions:addHistory', (entry) => {
+    const staff = session.requireLogin();
+    return db.addSubscriptionHistory({ ...entry, createdByStaffId: staff.id });
+  });
+  handle('subscriptions:historyForClient', (clientId) => {
+    session.requireLogin();
+    return db.getSubscriptionHistoryForClient(clientId);
+  });
+  handle('subscriptions:refillsDue', (windowDays) => {
+    session.requireLogin();
+    return db.getRefillsDue(windowDays != null ? windowDays : 7);
+  });
+
   // ---------- Appointments ----------
   handle('appointments:add', (appointment) => {
     const staff = session.requireLogin();
