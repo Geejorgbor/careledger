@@ -1,0 +1,47 @@
+name: Build and Release
+
+# Builds CareLedger for Windows, Mac, and Linux and publishes the
+# installers to a GitHub Release, so a real Windows/Mac build can be made
+# without owning a Windows or Mac computer.
+#
+# How to ship a new version:
+#   1. Bump "version" in package.json
+#   2. Commit that change
+#   3. Tag it to match, e.g.:  git tag v0.2.0
+#   4. Push both:              git push && git push --tags
+# Pushing a tag like v0.2.0 triggers this workflow automatically. Each
+# platform publishes its own installer to the same GitHub Release (the
+# version in package.json is what electron-builder uses as the release
+# tag, so it must match the git tag you push).
+#
+# It can also be run by hand from the GitHub Actions tab ("Run workflow")
+# without pushing a new tag, e.g. to rebuild the current version.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

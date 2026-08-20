@@ -309,6 +309,33 @@ controls. `dist/` is never committed to git (it's just built output, easy
 to regenerate) — the file that matters is whatever comes out of that
 folder, ready to hand to someone.
 
+### Building Windows and Mac versions without owning a Windows or Mac computer
+
+`.github/workflows/release.yml` builds all three platforms automatically
+using GitHub's own free build machines (GitHub Actions) — no Windows or
+Mac computer needed on our end. To ship a new version:
+
+```bash
+# 1. bump "version" in package.json, then:
+git add package.json
+git commit -m "bump version to 0.2.0"
+git tag v0.2.0
+git push && git push --tags
+```
+
+Pushing a tag like `v0.2.0` automatically triggers three builds (Linux,
+Windows, Mac) on GitHub's servers, and each one publishes its installer to
+the same GitHub Release — the tag version and `package.json`'s version
+must match, since that's what electron-builder uses as the release name.
+Progress can be watched under the repo's **Actions** tab on GitHub. It can
+also be re-run by hand from that same tab ("Run workflow") without pushing
+a new tag, e.g. to rebuild the current version again.
+
+The local `npm run dist` / `npm run release` commands above still work for
+a quick Linux build on this machine, but actual Windows/Mac installers can
+only come from this GitHub Actions workflow (or a real Windows/Mac
+computer) — building a `.exe` or `.dmg` from Linux directly isn't possible.
+
 ## How it's put together (plain words)
 
 - **`src/main/`** — the "backend" that runs on the clinic's computer.
