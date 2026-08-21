@@ -6,12 +6,16 @@ const { createSession } = require('./session');
 const { runAutoBackup } = require('./backup');
 const { checkForUpdatesQuietly } = require('./updater');
 const { checkRemoteLicense } = require('./licenseSync');
+const { pushSubscriptionData } = require('./cloudSync');
 
 const AUTO_BACKUP_INTERVAL_MS = 60 * 60 * 1000; // hourly
 const FIRST_AUTO_BACKUP_DELAY_MS = 10 * 1000; // shortly after startup, not blocking it
 
 const LICENSE_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6 hours
 const FIRST_LICENSE_SYNC_DELAY_MS = 15 * 1000; // shortly after startup, not blocking it
+
+const CLOUD_SYNC_INTERVAL_MS = 2 * 60 * 60 * 1000; // every 2 hours — this is the one thing that needs to reach the app somewhat promptly, since real people are waiting on it
+const FIRST_CLOUD_SYNC_DELAY_MS = 20 * 1000; // shortly after startup, not blocking it
 
 let mainWindow;
 let db;
@@ -73,6 +77,35 @@ async function performLicenseSync() {
   }
 }
 
+async function performCloudSync() {
+  try {
+    if (db.getSetting('refillRemindersEnabled') !== '1') return; // opt-in, off by default
+
+    const smsUsername = db.getSetting('smsUsername');
+    const smsApiKey = db.getSetting('smsApiKey');
+    if (!smsUsername || !smsApiKey) return; // nothing the cloud service could actually send with yet
+
+    const clinicId = db.getOrCreateClinicId();
+    const syncToken = db.getSetting('cloudSyncToken') || undefined;
+    const clients = db.getAllSubscriptionClientsWithHistory();
+    const smsSettings = { username: smsUsername, apiKey: smsApiKey, senderId: db.getSetting('smsSenderId') || null };
+
+    const result = await pushSubscriptionData({ clinicId, syncToken, clients, smsSettings });
+    if (result.ok) {
+      db.setSetting('cloudSyncToken', result.syncToken);
+      db.setSetting('lastCloudSyncAt', new Date().toISOString());
+      db.setSetting('lastCloudSyncError', '');
+    } else {
+      db.setSetting('lastCloudSyncError', result.error);
+    }
+  } catch (err) {
+    // Same rule as backups, license sync, and updates: a sync hiccup must
+    // never crash the app or interrupt anyone using it.
+    console.error('Cloud sync failed:', err.message);
+    db.setSetting('lastCloudSyncError', err.message);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100,
@@ -97,6 +130,9 @@ app.whenReady().then(() => {
 
   setTimeout(performLicenseSync, FIRST_LICENSE_SYNC_DELAY_MS);
   setInterval(performLicenseSync, LICENSE_SYNC_INTERVAL_MS);
+
+  setTimeout(performCloudSync, FIRST_CLOUD_SYNC_DELAY_MS);
+  setInterval(performCloudSync, CLOUD_SYNC_INTERVAL_MS);
 
   // Only checks in the real installed app — during development (npm
   // start) there's no packaged update artifact to compare against.

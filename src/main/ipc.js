@@ -211,6 +211,27 @@ function registerIpcHandlers(db, session, getBackupsDir) {
     return { reply, assistantName };
   });
 
+  // ---------- Subscription refill reminders (settings + cloud sync status) ----------
+  handle('refills:getSettings', () => {
+    session.requireLogin();
+    return {
+      enabled: db.getSetting('refillRemindersEnabled') === '1',
+      smsUsername: db.getSetting('smsUsername') || '',
+      hasApiKey: Boolean(db.getSetting('smsApiKey')),
+      smsSenderId: db.getSetting('smsSenderId') || '',
+      lastSyncAt: db.getSetting('lastCloudSyncAt'),
+      lastSyncError: db.getSetting('lastCloudSyncError'),
+    };
+  });
+
+  handle('refills:saveSettings', ({ enabled, smsUsername, apiKey, smsSenderId }) => {
+    session.requireAdmin();
+    db.setSetting('refillRemindersEnabled', enabled ? '1' : '0');
+    if (smsUsername != null) db.setSetting('smsUsername', smsUsername.trim());
+    if (apiKey) db.setSetting('smsApiKey', apiKey.trim());
+    if (smsSenderId != null) db.setSetting('smsSenderId', smsSenderId.trim());
+  });
+
   // ---------- Dispensary ----------
   handle('drugs:add', (drug) => {
     const staff = session.requireDispensaryAccess();

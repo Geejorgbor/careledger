@@ -135,6 +135,14 @@ const els = {
   settingsAssistantApiKey: document.getElementById('settings-assistant-api-key'),
   assistantSettingsSaved: document.getElementById('assistant-settings-saved'),
 
+  refillSettingsForm: document.getElementById('refill-settings-form'),
+  settingsRefillEnabled: document.getElementById('settings-refill-enabled'),
+  settingsSmsUsername: document.getElementById('settings-sms-username'),
+  settingsSmsApiKey: document.getElementById('settings-sms-api-key'),
+  settingsSmsSenderId: document.getElementById('settings-sms-sender-id'),
+  refillSettingsSaved: document.getElementById('refill-settings-saved'),
+  refillSyncStatus: document.getElementById('refill-sync-status'),
+
   modalNewPatient: document.getElementById('modal-new-patient'),
   formNewPatient: document.getElementById('form-new-patient'),
   modalNewVisit: document.getElementById('modal-new-visit'),
@@ -302,6 +310,11 @@ function applyPermissionsToUI(role) {
   els.assistantSettingsForm.querySelector('button[type="submit"]').hidden = !isAdmin;
   els.settingsAssistantName.disabled = !isAdmin;
   els.settingsAssistantApiKey.disabled = !isAdmin;
+  els.refillSettingsForm.querySelector('button[type="submit"]').hidden = !isAdmin;
+  els.settingsRefillEnabled.disabled = !isAdmin;
+  els.settingsSmsUsername.disabled = !isAdmin;
+  els.settingsSmsApiKey.disabled = !isAdmin;
+  els.settingsSmsSenderId.disabled = !isAdmin;
 
   els.btnNewDrug.hidden = !canDispense;
   els.btnRestockDrug.hidden = !canDispense;
@@ -831,6 +844,40 @@ els.assistantSettingsForm.addEventListener('submit', async (e) => {
   setTimeout(() => { els.assistantSettingsSaved.hidden = true; }, 1500);
 });
 
+// ---------- Subscription refill reminder settings ----------
+
+async function loadRefillSettings() {
+  const settings = await window.careledger.getRefillSettings();
+  els.settingsRefillEnabled.checked = settings.enabled;
+  els.settingsSmsUsername.value = settings.smsUsername;
+  els.settingsSmsApiKey.placeholder = settings.hasApiKey ? 'Already set — leave blank to keep it' : '';
+  els.settingsSmsSenderId.value = settings.smsSenderId;
+
+  if (settings.lastSyncError) {
+    els.refillSyncStatus.textContent = `Last sync failed: ${settings.lastSyncError}`;
+  } else if (settings.lastSyncAt) {
+    els.refillSyncStatus.textContent = `Last synced with the reminder service: ${new Date(settings.lastSyncAt).toLocaleString()}`;
+  } else {
+    els.refillSyncStatus.textContent = settings.enabled
+      ? 'Not synced yet — happens automatically shortly after the app opens.'
+      : '';
+  }
+}
+
+els.refillSettingsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await window.careledger.saveRefillSettings({
+    enabled: els.settingsRefillEnabled.checked,
+    smsUsername: els.settingsSmsUsername.value.trim(),
+    apiKey: els.settingsSmsApiKey.value.trim(),
+    smsSenderId: els.settingsSmsSenderId.value.trim(),
+  });
+  els.settingsSmsApiKey.value = '';
+  await loadRefillSettings();
+  els.refillSettingsSaved.hidden = false;
+  setTimeout(() => { els.refillSettingsSaved.hidden = true; }, 1500);
+});
+
 // ---------- Billing ----------
 
 async function loadBilling() {
@@ -1267,7 +1314,7 @@ els.navBtns.forEach((btn) => {
     if (btn.dataset.view === 'subscriptions') loadSubscriptions();
     if (btn.dataset.view === 'trends') loadTrends();
     if (btn.dataset.view === 'assistant') loadAssistantSettings();
-    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); loadAssistantSettings(); }
+    if (btn.dataset.view === 'settings') { loadStaff(); loadBackupStatus(); loadAppVersion(); loadAssistantSettings(); loadRefillSettings(); }
   });
 });
 

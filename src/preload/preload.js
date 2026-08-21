@@ -63,4 +63,7 @@ contextBridge.exposeInMainWorld('careledger', {
   getAssistantSettings: () => unwrap(ipcRenderer.invoke('assistant:getSettings')),
   saveAssistantSettings: (data) => unwrap(ipcRenderer.invoke('assistant:saveSettings', data)),
   sendAssistantMessage: (history, message) => unwrap(ipcRenderer.invoke('assistant:sendMessage', { history, message })),
+
+  getRefillSettings: () => unwrap(ipcRenderer.invoke('refills:getSettings')),
+  saveRefillSettings: (data) => unwrap(ipcRenderer.invoke('refills:saveSettings', data)),
 });

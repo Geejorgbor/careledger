@@ -258,30 +258,46 @@ it something (unlike the rest of the app) and a real, paid API key —
 CareLedger has no AI account of its own, so this only works once one has
 been added in Settings.
 
-**Subscriptions (retail refill-plan clients) — in progress.** A new
-**Subscriptions** tab, separate from clinical Patients, for tracking
-retail/subscription customers (e.g. a pharmacy's refill plan): add a
-client (name, phone, who's sponsoring them), and log dated history
-entries under them — an **Order** (medication, quantity, day supply), a
-**Note** (a call/clinical note), or a plain **Contact** attempt. This is
-deliberately a separate concept from Patients/Visits — a retail refill
-customer isn't a clinical visit, so it doesn't carry vitals, billing, or
-appointments.
+**Subscriptions (retail refill-plan clients).** A new **Subscriptions**
+tab, separate from clinical Patients, for tracking retail/subscription
+customers (e.g. a pharmacy's refill plan): add a client (name, phone,
+who's sponsoring them), and log dated history entries under them — an
+**Order** (medication, quantity, day supply), a **Note** (a call/clinical
+note), or a plain **Contact** attempt. This is deliberately a separate
+concept from Patients/Visits — a retail refill customer isn't a clinical
+visit, so it doesn't carry vitals, billing, or appointments.
 
 The refill math lives in `db.js`'s `getRefillsDue(windowDays)`: for every
 client's medication, only the **most recent** Order entry counts (an
 older order for the same medication is superseded automatically); its
 due date is that order's date + its day supply, and a client already
 reminded for a given order is never returned again until they log a new
-order. Built and tested (`test/db.test.js`), but **the daily automatic
-check + actual SMS sending is not built yet** — right now this only
-tracks the data and computes who's due; nothing texts anyone yet. That
-part is planned to live on a small always-on service PayeConnect (not
-any individual clinic) hosts and every CareLedger install can check in
-with — same shape as the update-check/license-sync pattern already in
-`main.js`, extended further — so it works the same way whether it's
-Ducor or any future clinic using CareLedger, and doesn't depend on any
-one clinic's own website or a single computer being turned on.
+order.
+
+**Automatic SMS reminders (opt-in, Settings → Subscription Refill
+Reminders).** Turning this on and adding an Africa's Talking
+username/API key does two things: `cloudSync.js` starts periodically
+pushing this clinic's Subscriptions data (via `main.js`, same
+shortly-after-startup-then-every-few-hours pattern as backups and license
+sync) to **`careledger-cloud`** — a small always-on service, hosted
+separately by PayeConnect (not tied to any one clinic's own website), at
+[github.com/Geejorgbor/careledger-cloud](https://github.com/Geejorgbor/careledger-cloud)
+(private — real client names/phone numbers can never live in this public
+`careledger` repo). A daily job there (Vercel Cron) checks every synced
+clinic and texts whoever's due, through **that clinic's own** SMS
+account — never a shared PayeConnect-owned one — then marks the reminder
+sent. This is the one part of the feature that's genuinely always-on,
+independent of any clinic's computer being turned on.
+
+Auth to that service is a per-clinic token issued on first sync, not a
+secret baked into the app (this repo is public, so anything hardcoded
+here wouldn't actually be secret) — see that service's own README for the
+full design. **Known limitation:** the sync is one-directional
+(CareLedger → cloud only) — if the cloud service marks a reminder sent,
+that doesn't currently flow back to update this app's own local copy, so
+CareLedger's own Subscriptions screen can't be fully trusted as "has this
+person been texted yet" once cloud reminders are turned on; worth
+building a pull-back sync if that ever becomes a real problem.
 
 All five build-order phases from the original product plan are now built,
 plus the automatic backup safeguard from Section 6, packaging, printable
@@ -394,6 +410,9 @@ computer) — building a `.exe` or `.dmg` from Linux directly isn't possible.
     rules + the clinic's live data snapshot) and calls Anthropic's API.
     No database or Electron code, so the prompt-building half is directly
     unit-tested without needing a real API key.
+  - `cloudSync.js` — pushes this clinic's Subscriptions data to the
+    always-on `careledger-cloud` service. Failures are always treated as
+    "will retry next interval," never shown to the user.
   - `main.js` — opens the app window, starts everything up, and schedules
     the automatic backup (shortly after opening, then hourly), the update
     check, and the remote license check (shortly after opening, then every

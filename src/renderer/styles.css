@@ -300,13 +300,18 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
 }
 .cancel-btn:hover { background: #f6f8f7; }
 
-#settings-form, #license-form, #assistant-settings-form {
+#settings-form, #license-form, #assistant-settings-form, #refill-settings-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-width: 360px;
 }
-#settings-form label, #license-form label, #assistant-settings-form label, .clinic-id-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+#settings-form label, #license-form label, #assistant-settings-form label, #refill-settings-form label, .clinic-id-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-muted); }
+#refill-settings-form label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
 
 .clinic-id-label {
   max-width: 360px;

@@ -280,6 +280,11 @@ function createDb(dbPath) {
     listSubscriptionClients: conn.prepare(`
       SELECT * FROM subscription_clients ORDER BY name LIMIT 200
     `),
+    // Unlimited — for the full cloud-sync export, unlike the capped
+    // on-screen list above.
+    listSubscriptionClients_all: conn.prepare(`
+      SELECT * FROM subscription_clients ORDER BY name
+    `),
     setSubscriptionClientStatus: conn.prepare(`
       UPDATE subscription_clients SET status = @status WHERE id = @id
     `),
@@ -855,6 +860,27 @@ function createDb(dbPath) {
           return { ...row, due_date: dueDate, days_until_due: daysBetweenDateStrings(today, dueDate) };
         })
         .filter((row) => row.days_until_due <= windowDays);
+    },
+
+    // The full Subscriptions state, shaped for the always-on cloud
+    // reminder service (careledger-cloud) — every client with their full
+    // history, not just what's due. The cloud service does its own due
+    // calculation independently rather than trusting a pre-filtered list.
+    getAllSubscriptionClientsWithHistory() {
+      return stmts.listSubscriptionClients_all.all().map((client) => ({
+        id: client.id,
+        name: client.name,
+        phone: client.phone,
+        status: client.status,
+        history: stmts.getSubscriptionHistoryForClient.all(client.id).map((h) => ({
+          id: h.id,
+          entryDate: h.entry_date,
+          entryType: h.entry_type,
+          medication: h.medication,
+          daySupply: h.day_supply,
+          reminderSentAt: h.reminder_sent_at,
+        })),
+      }));
     },
 
     // Uses SQLite's own online backup API (via better-sqlite3) rather than

@@ -442,6 +442,33 @@
         <p class="auth-sub">Needs internet at the moment someone asks it something, and only works on the
           10-Month plan. Ask PayeConnect for help getting an API key.</p>
 
+        <h2>Subscription Refill Reminders</h2>
+        <p class="auth-sub">Automatically texts a client when their medication is almost finished. The
+          actual daily check runs on an always-on PayeConnect service (not this computer), so reminders still go
+          out even when CareLedger isn't open — but this computer does need to be opened sometimes so it can
+          send your latest client list there.</p>
+        <form id="refill-settings-form">
+          <label>
+            <input type="checkbox" id="settings-refill-enabled" />
+            Turn on automatic refill reminders
+          </label>
+          <label>
+            Africa's Talking Username
+            <input id="settings-sms-username" type="text" autocomplete="off" />
+          </label>
+          <label>
+            Africa's Talking API Key
+            <input id="settings-sms-api-key" type="password" placeholder="Leave blank to keep it" autocomplete="off" />
+          </label>
+          <label>
+            Sender ID (optional)
+            <input id="settings-sms-sender-id" type="text" placeholder="e.g. your clinic's short name" />
+          </label>
+          <button type="submit" class="primary">Save</button>
+        </form>
+        <p id="refill-settings-saved" class="empty-state" hidden>Saved.</p>
+        <p id="refill-sync-status" class="auth-sub"></p>
+
         <h3>Clinic Logo</h3>
         <p class="auth-sub">Shown at the top of the app and on printed receipts, so it feels made just for your clinic.</p>
         <img id="settings-logo-preview" alt="Clinic logo" hidden />

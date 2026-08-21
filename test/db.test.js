@@ -692,6 +692,19 @@ async function run() {
   assert.strictEqual(historyForA.length, 3, 'client A should have all 3 of their history entries (2 orders + 1 note)');
   assert.strictEqual(historyForA[0].recorded_by_name, 'Sub Staff', 'history should be attributed to the staff member who logged it');
 
+  // Cloud-sync export shape — this is what gets pushed to careledger-cloud
+  const exportedClients = db11.getAllSubscriptionClientsWithHistory();
+  assert.strictEqual(exportedClients.length, 4, 'all 4 clients should be exported, regardless of status');
+  const exportedA = exportedClients.find((c) => c.name === 'Client Due Soon');
+  assert.strictEqual(exportedA.history.length, 3);
+  assert.deepStrictEqual(
+    Object.keys(exportedA.history[0]).sort(),
+    ['daySupply', 'entryDate', 'entryType', 'id', 'medication', 'reminderSentAt'].sort(),
+    'exported history rows should use the camelCase shape careledger-cloud expects, not raw column names'
+  );
+  const exportedAOrderReminded = exportedA.history.find((h) => h.id === dueSoonRow.id);
+  assert.ok(exportedAOrderReminded.reminderSentAt, 'a reminder marked sent locally should be reflected in the export');
+
   db11.close();
 
   console.log('All db.js tests passed.');
